@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server'
 
 const secret = new TextEncoder().encode(process.env.ADMIN_JWT_SECRET)
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest){
   const authHeader = req.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
