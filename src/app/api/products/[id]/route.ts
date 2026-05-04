@@ -4,8 +4,9 @@ import { prisma } from '@/lib/prisma'
 // GET /api/products/:id — single product full detail
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const product = await prisma.product.findFirst({
       where: {

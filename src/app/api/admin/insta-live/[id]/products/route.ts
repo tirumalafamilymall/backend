@@ -5,8 +5,9 @@ import { prisma } from '@/lib/prisma'
 // Body: { product_id }
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const { product_id } = await req.json()
 
@@ -37,8 +38,9 @@ export async function POST(
 // Body: { product_id }
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const { product_id } = await req.json()
 

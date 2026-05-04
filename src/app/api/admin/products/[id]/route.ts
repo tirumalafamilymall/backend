@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const product = await prisma.product.findFirst({
       where: {
@@ -30,8 +31,9 @@ export async function GET(
 // Body: any subset of product fields
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const body = await req.json()
 
@@ -89,8 +91,9 @@ export async function PATCH(
 // DELETE /api/admin/products/:id
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const product = await prisma.product.findUnique({ where: { id: params.id } })
     if (!product) {

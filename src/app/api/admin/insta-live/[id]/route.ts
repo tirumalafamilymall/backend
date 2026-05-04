@@ -5,8 +5,9 @@ import { prisma } from '@/lib/prisma'
 // Body: { title?, instagram_url?, thumbnail?, is_active?, product_ids? }
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const { title, instagram_url, thumbnail, is_active, product_ids } = await req.json()
 
@@ -54,8 +55,9 @@ export async function PATCH(
 // DELETE /api/admin/insta-live/:id — delete post
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const post = await prisma.instaLive.findUnique({ where: { id: params.id } })
     if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })

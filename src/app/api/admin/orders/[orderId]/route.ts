@@ -5,8 +5,9 @@ import { sendShippingMail } from '@/lib/mailer'
 // GET /api/admin/orders/:orderId
 export async function GET(
   req: Request,
-  { params }: { params: { orderId: string } }
+  _context: { params: Promise<{ orderId: string }> }
 ) {
+  const params = await _context.params
   try {
     const order = await prisma.order.findUnique({
       where: { id: params.orderId },
@@ -29,8 +30,9 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } }
+  _context: { params: Promise<{ orderId: string }> }
 ) {
+  const params = await _context.params
   try {
     const { status, tracking_url, shiprocket_order_id } = await req.json()
 

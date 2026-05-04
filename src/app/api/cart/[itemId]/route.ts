@@ -5,8 +5,9 @@ import { getUserFromRequest } from '@/lib/auth'
 // PATCH /api/cart/:itemId — update quantity
 export async function PATCH(
   req: Request,
-  { params }: { params: { itemId: string } }
+  _context: { params: Promise<{ itemId: string }> }
 ) {
+  const params = await _context.params
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,8 +43,9 @@ export async function PATCH(
 // DELETE /api/cart/:itemId — remove single item
 export async function DELETE(
   req: Request,
-  { params }: { params: { itemId: string } }
+  _context: { params: Promise<{ itemId: string }> }
 ) {
+  const params = await _context.params
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

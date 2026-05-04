@@ -4,8 +4,9 @@ import { prisma } from '@/lib/prisma'
 // GET /api/admin/users/:id — full user detail with order history
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const user = await prisma.user.findUnique({
       where: { id: params.id },

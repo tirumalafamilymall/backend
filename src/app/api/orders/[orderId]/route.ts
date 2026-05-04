@@ -4,8 +4,9 @@ import { getUserFromRequest } from '@/lib/auth'
 
 export async function GET(
   req: Request,
-  { params }: { params: { orderId: string } }
+  _context: { params: Promise<{ orderId: string }> }
 ) {
+  const params = await _context.params
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

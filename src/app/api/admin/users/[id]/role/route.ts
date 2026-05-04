@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 
 async function handlePATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ) {
+  const params = await _context.params
   try {
     const { role } = await req.json()
 
