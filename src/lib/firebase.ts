@@ -1,0 +1,1 @@
+export { adminAuth as auth } from './firebase-admin'
