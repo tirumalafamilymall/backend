@@ -7,11 +7,24 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
 
     const status = searchParams.get('status')
+    const payment_status = searchParams.get('payment_status')
+    const search = searchParams.get('search')
 
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
-    const where = status ? { status: status as any } : {}
+    // Dynamically build the where clause based on provided filters
+    const where: any = {
+      ...(status && { status: status as any }),
+      ...(payment_status && { payment_status: payment_status as any }),
+      ...(search && {
+        OR: [
+          { order_number: { contains: search, mode: 'insensitive' } },
+          { user: { name: { contains: search, mode: 'insensitive' } } },
+          { user: { email: { contains: search, mode: 'insensitive' } } },
+        ]
+      })
+    }
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({

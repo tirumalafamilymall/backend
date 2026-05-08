@@ -4,9 +4,9 @@ import { parseExcelBuffer } from '@/lib/excel'
 import { v4 as uuidv4 } from 'uuid'
 import { generateSlug } from '@/lib/slug'
 
+export const maxDuration = 60
+
 // POST /api/admin/products/excel
-// Accepts multipart form with Excel file
-// Parses, validates, and bulk inserts products
 export async function POST(req: Request) {
   try {
     const formData = await req.formData()
@@ -35,92 +35,109 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
-    // Batch insert — same logic as bulk upload
-    const results = []
-    const batchSize = 10
+    // ── Step 1: Separate products into updates vs creates ──────────────────
+    const toUpdate: typeof products = []
+    const toCreate: typeof products = []
 
-    for (let i = 0; i < products.length; i += batchSize) {
-      const batch = products.slice(i, i + batchSize)
+    // Only check for existing codes if any products have a code
+    const codesInFile = products.map(p => p.product_code).filter(Boolean) as string[]
 
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-            // If product_code exists in Excel, check for duplicate
-            if (item.product_code) {
-              const existing = await prisma.product.findUnique({
-                where: { product_code: item.product_code },
-              })
-
-              if (existing) {
-                // Update existing product instead of creating
-                const updated = await prisma.product.update({
-                  where: { product_code: item.product_code },
-                  data: {
-                    name:        item.name,
-                    category:    item.category,
-                    subcategory: item.subcategory,
-                    brand:       item.brand,
-                    base_price:  item.base_price,
-                    stock:       item.stock,
-                    color:       item.color,
-                    size:        item.size,
-                    barcode:     item.barcode,
-                  },
-                })
-                return { success: true, action: 'updated', product: updated }
-              }
-            }
-
-// Create new product
-const code = item.product_code || `PROD-${uuidv4()}`
-const product = await prisma.product.create({
-data: {
-  name: item.name,
-  category: item.category,
-  subcategory: item.subcategory || null,
-  brand: item.brand || null,
-  base_price: item.base_price,
-  stock: item.stock || 0,
-  color: item.color || null,
-  size: item.size || null,
-  barcode: item.barcode || null,
-  images: item.images || [],
-  product_code: code,
-  slug: generateSlug(item.name, code),
-},
-})
-
-            return { success: true, action: 'created', product }
-          } catch (err: any) {
-            console.error(err)
-            return {
-              success: false,
-              error: err.message || 'Insert failed',
-              item,
-            }
-          }
+    // Fetch all existing products with those codes in ONE query
+    const existingProducts = codesInFile.length > 0
+      ? await prisma.product.findMany({
+          where: { product_code: { in: codesInFile } },
+          select: { product_code: true },
         })
-      )
+      : []
 
-      results.push(...batchResults)
+    const existingCodes = new Set(existingProducts.map(p => p.product_code))
+
+    for (const item of products) {
+      if (item.product_code && existingCodes.has(item.product_code)) {
+        toUpdate.push(item)
+      } else {
+        toCreate.push(item)
+      }
     }
 
-    const created  = results.filter((r) => r.success && r.action === 'created').length
-    const updated  = results.filter((r) => r.success && r.action === 'updated').length
-    const failed   = results.filter((r) => !r.success)
+    // ── Step 2: Bulk CREATE with createMany (single DB round trip) ─────────
+    let created = 0
+    const createFailures: any[] = []
+
+    if (toCreate.length > 0) {
+      try {
+        const createData = toCreate.map(item => {
+          const code = item.product_code || `PROD-${uuidv4()}`
+          return {
+            name:         item.name,
+            category:     item.category,
+            subcategory:  item.subcategory  || null,
+            brand:        item.brand        || null,
+            base_price:   item.base_price,
+            stock:        item.stock        || 0,
+            color:        item.color        || null,
+            size:         item.size         || null,
+            barcode:      item.barcode      || null,
+            images:       item.images       || [],
+            product_code: code,
+            slug:         generateSlug(item.name, code),
+          }
+        })
+
+        const result = await prisma.product.createMany({
+          data: createData,
+          skipDuplicates: true,
+        })
+
+        created = result.count
+      } catch (err: any) {
+        console.error('createMany failed:', err)
+        createFailures.push({ error: err.message || 'Bulk create failed' })
+      }
+    }
+
+    // ── Step 3: UPDATE existing products (loop — these are rare) ──────────
+    let updated = 0
+    const updateFailures: any[] = []
+
+    for (const item of toUpdate) {
+      try {
+        await prisma.product.update({
+          where: { product_code: item.product_code! },
+          data: {
+            name:        item.name,
+            category:    item.category,
+            subcategory: item.subcategory || null,
+            brand:       item.brand       || null,
+            base_price:  item.base_price,
+            stock:       item.stock       || 0,
+            color:       item.color       || null,
+            size:        item.size        || null,
+            barcode:     item.barcode     || null,
+          },
+        })
+        updated++
+      } catch (err: any) {
+        console.error('update failed:', err)
+        updateFailures.push({ error: err.message || 'Update failed', item })
+      }
+    }
+
+    const allFailures = [...createFailures, ...updateFailures]
 
     return NextResponse.json({
       success: true,
       summary: {
-        total_rows:    products.length,
+        total_rows:   products.length,
         created,
         updated,
-        failed:        failed.length,
-        parse_errors:  parseErrors.length,
+        failed:       allFailures.length,
+        parse_errors: parseErrors.length,
       },
       parse_errors: parseErrors,
-      failed_rows:  failed,
+      failed_rows:  allFailures,
     })
+
   } catch (error) {
     console.error(error)
     return NextResponse.json(

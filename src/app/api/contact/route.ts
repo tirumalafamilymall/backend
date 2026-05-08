@@ -1,28 +1,27 @@
 import { NextResponse } from 'next/server'
 import { sendContactMail } from '@/lib/mailer'
 
-// POST /api/contact
-// Body: { name, email, phone, message }
-// No auth required — public endpoint
 export async function POST(req: Request) {
   try {
     const { name, email, phone, message } = await req.json()
 
-    // Validate
-    if (!name || !email || !message) {
+    // Validate (Email is no longer strictly required)
+    if (!name || !message) {
       return NextResponse.json(
-        { error: 'name, email and message are required' },
+        { error: 'Name and message are required' },
         { status: 400 }
       )
     }
 
-    // Basic email format check
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email address' },
-        { status: 400 }
-      )
+    // Only run Regex check IF an email was actually provided
+    if (email && email.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(email)) {
+        return NextResponse.json(
+          { error: 'Invalid email address' },
+          { status: 400 }
+        )
+      }
     }
 
     // Sanitize — strip HTML tags to prevent injection
@@ -31,7 +30,7 @@ export async function POST(req: Request) {
 
     await sendContactMail({
       senderName:  sanitize(name),
-      senderEmail: sanitize(email),
+      senderEmail: sanitize(email || 'No email provided'), // Fallback added
       senderPhone: sanitize(phone || 'Not provided'),
       message:     sanitize(message),
     })
