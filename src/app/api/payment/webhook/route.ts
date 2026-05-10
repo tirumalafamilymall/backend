@@ -39,25 +39,13 @@ if (event.event === 'payment.captured') {
     return NextResponse.json({ received: true })
   }
 
-  // ✅ Single atomic transaction
-  await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: order.id },
-      data: {
-        payment_status: 'PAID',
-        payment_id: razorpay_payment_id,
-        status: 'CONFIRMED',
-      },
-    })
-
-    await Promise.all(
-      order.items.map((item) =>
-        tx.product.update({
-          where: { id: item.product_id },
-          data: { stock: { decrement: item.quantity } },
-        })
-      )
-    )
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      payment_status: 'PAID',
+      payment_id: razorpay_payment_id,
+      status: 'CONFIRMED',
+    },
   })
 }
 
