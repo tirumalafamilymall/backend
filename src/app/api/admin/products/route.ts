@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
     const where: any = {
+      is_deleted: false,
       ...(category  && { category: { contains: category, mode: 'insensitive' } }),
       ...(brand     && { brand:    { contains: brand,    mode: 'insensitive' } }),
       ...(is_active !== null && is_active !== undefined && {

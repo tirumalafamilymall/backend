@@ -32,6 +32,7 @@ model Product {
   barcode             String?
   images              String[]
   is_active           Boolean            @default(true)
+  is_deleted  Boolean @default(false)
   created_at          DateTime           @default(now())
   updated_at          DateTime           @updatedAt
   slug                String?            @unique

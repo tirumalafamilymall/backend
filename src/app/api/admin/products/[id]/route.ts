@@ -9,9 +9,10 @@ export async function GET(
   try {
     const product = await prisma.product.findFirst({
       where: {
+        is_deleted: false, // <-- ADD THIS
         OR: [
           { id:   params.id },
-          { slug: params.id }, // works for both UUID and slug
+          { slug: params.id },
         ],
       },
     })
@@ -100,11 +101,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    // Soft delete — just deactivate
-    // Prevents breaking order history that references this product
+    // Soft delete — True Deletion
     const updated = await prisma.product.update({
       where: { id: params.id },
-      data:  { is_active: false },
+      data:  { is_deleted: true, is_active: false }, // Set is_deleted to true
     })
 
     return NextResponse.json({ success: true, product: updated })
