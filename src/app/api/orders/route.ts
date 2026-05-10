@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { shipping_address, notes } = await req.json()
+    const { shipping_address, notes, shipping_amount = 0 } = await req.json()
 
     if (!shipping_address) {
       return NextResponse.json({ error: 'shipping_address is required' }, { status: 400 })
@@ -59,14 +59,16 @@ export async function POST(req: Request) {
       }
     }
 
-    const total_amount = await calculateCartTotal(cart.id)
+    const cart_subtotal = await calculateCartTotal(cart.id)
+    const total_amount = cart_subtotal + Number(shipping_amount)
 
-    const order = await prisma.$transaction(async (tx) => {
+const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
         data: {
           order_number:    generateOrderNumber(),
           user_id:         user.id,
-          total_amount,
+          total_amount,    // Correct Total (Products + Shipping)
+          shipping_amount: Number(shipping_amount), // Log shipping separately
           shipping_address,
           notes:           notes || null,
           status:          'PENDING',

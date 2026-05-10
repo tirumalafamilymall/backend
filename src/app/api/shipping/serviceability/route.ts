@@ -19,12 +19,12 @@ export async function GET(req: Request) {
 
     const available_couriers = data?.data?.available_courier_companies || []
     const is_serviceable     = available_couriers.length > 0
-    const cod_available      = available_couriers.some((c: any) => c.cod === 1)
+    const actual_cost = is_serviceable ? available_couriers[0]?.freight_charge : 0
 
     return NextResponse.json({
       success:          true,
       is_serviceable,
-      cod_available,
+      shipping_cost: Number(actual_cost),
       couriers:         available_couriers.length,
       estimated_days:   available_couriers[0]?.estimated_delivery_days || null,
     })
