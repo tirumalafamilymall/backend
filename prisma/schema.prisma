@@ -1,9 +1,9 @@
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
 }
 
 model User {
@@ -11,31 +11,30 @@ model User {
   firebase_uid String    @unique
   email        String?
   name         String?
-  role         Role      @default(USER)
   created_at   DateTime  @default(now())
+  role         Role      @default(USER)
   cart         Cart?
   orders       Order[]
   wishlist     Wishlist?
 }
 
 model Product {
-  id           String   @id @default(uuid())
-  product_code String   @unique
-  name         String
-  category     String
-  subcategory  String?
-  brand        String?
-  base_price   Float
-  color        String?
-  size         String?
-  stock        Int      @default(0)
-  barcode      String?
-  images       String[]
-  slug         String?  @unique
-  is_active    Boolean  @default(true)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-
+  id                  String             @id @default(uuid())
+  product_code        String             @unique
+  name                String
+  category            String
+  subcategory         String?
+  brand               String?
+  base_price          Float
+  color               String?
+  size                String?
+  stock               Int                @default(0)
+  barcode             String?
+  images              String[]
+  is_active           Boolean            @default(true)
+  created_at          DateTime           @default(now())
+  updated_at          DateTime           @updatedAt
+  slug                String?            @unique
   cart_items          CartItem[]
   insta_live_products InstaLiveProduct[]
   wishlist_items      WishlistItem[]
@@ -44,21 +43,21 @@ model Product {
 model Cart {
   id         String     @id @default(uuid())
   user_id    String     @unique
-  user       User       @relation(fields: [user_id], references: [id])
-  items      CartItem[]
   created_at DateTime   @default(now())
   updated_at DateTime   @updatedAt
+  user       User       @relation(fields: [user_id], references: [id])
+  items      CartItem[]
 }
 
 model CartItem {
   id         String   @id @default(uuid())
   cart_id    String
-  cart       Cart     @relation(fields: [cart_id], references: [id])
   product_id String
-  product    Product  @relation(fields: [product_id], references: [id])
   quantity   Int      @default(1)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+  cart       Cart     @relation(fields: [cart_id], references: [id])
+  product    Product  @relation(fields: [product_id], references: [id])
 
   @@unique([cart_id, product_id])
 }
@@ -67,8 +66,6 @@ model Order {
   id                  String        @id @default(uuid())
   order_number        String        @unique
   user_id             String
-  user                User          @relation(fields: [user_id], references: [id])
-  items               OrderItem[]
   status              OrderStatus   @default(PENDING)
   total_amount        Float
   payment_status      PaymentStatus @default(UNPAID)
@@ -80,12 +77,13 @@ model Order {
   notes               String?
   created_at          DateTime      @default(now())
   updated_at          DateTime      @updatedAt
+  user                User          @relation(fields: [user_id], references: [id])
+  items               OrderItem[]
 }
 
 model OrderItem {
   id           String   @id @default(uuid())
   order_id     String
-  order        Order    @relation(fields: [order_id], references: [id])
   product_id   String
   product_code String
   name         String
@@ -97,20 +95,7 @@ model OrderItem {
   quantity     Int
   image        String?
   created_at   DateTime @default(now())
-}
-
-enum OrderStatus {
-  PENDING
-  CONFIRMED
-  SHIPPED
-  DELIVERED
-  CANCELLED
-}
-
-enum PaymentStatus {
-  UNPAID
-  PAID
-  REFUNDED
+  order        Order    @relation(fields: [order_id], references: [id])
 }
 
 model InstaLive {
@@ -127,34 +112,48 @@ model InstaLive {
 model InstaLiveProduct {
   id            String    @id @default(uuid())
   insta_live_id String
-  insta_live    InstaLive @relation(fields: [insta_live_id], references: [id], onDelete: Cascade)
   product_id    String
+  insta_live    InstaLive @relation(fields: [insta_live_id], references: [id], onDelete: Cascade)
   product       Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
   @@unique([insta_live_id, product_id])
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
 model Wishlist {
   id         String         @id @default(uuid())
   user_id    String         @unique
-  user       User           @relation(fields: [user_id], references: [id])
-  items      WishlistItem[]
   created_at DateTime       @default(now())
   updated_at DateTime       @updatedAt
+  user       User           @relation(fields: [user_id], references: [id])
+  items      WishlistItem[]
 }
 
 model WishlistItem {
   id          String   @id @default(uuid())
   wishlist_id String
-  wishlist    Wishlist @relation(fields: [wishlist_id], references: [id])
   product_id  String
-  product     Product  @relation(fields: [product_id], references: [id])
   created_at  DateTime @default(now())
+  product     Product  @relation(fields: [product_id], references: [id])
+  wishlist    Wishlist @relation(fields: [wishlist_id], references: [id])
 
   @@unique([wishlist_id, product_id])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+}
+
+enum Role {
+  USER
+  ADMIN
 }
