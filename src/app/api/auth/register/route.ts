@@ -2,13 +2,10 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { adminAuth } from '@/lib/firebase-admin'
 
-// POST /api/auth/register
-// Called immediately after Firebase signup on frontend
-// Body: { firebase_token }
-// Creates the User row in our DB linked to Firebase UID
 export async function POST(req: Request) {
   try {
-    const { firebase_token } = await req.json()
+    // 1. Extract BOTH the token and the name from the request
+    const { firebase_token, name } = await req.json()
 
     if (!firebase_token) {
       return NextResponse.json(
@@ -29,18 +26,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, user: existing })
     }
 
-    // Create new user
+    // 2. Create new user, prioritizing the explicitly passed name!
     const user = await prisma.user.create({
       data: {
         firebase_uid: decoded.uid,
-        email:        decoded.email        || null,
-        name:         decoded.name         || null,
+        email:        decoded.email || null,
+        name:         name || decoded.name || null, // <-- Prioritizes the explicit name
       },
     })
 
     return NextResponse.json({ success: true, user }, { status: 201 })
   } catch (error: any) {
-    // Firebase token invalid or expired
     if (error.code?.startsWith('auth/')) {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
