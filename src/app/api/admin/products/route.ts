@@ -2,10 +2,16 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
 import { generateSlug } from '@/lib/slug'
+import { getAdminFromRequest } from '@/lib/auth'
 
 // GET /api/admin/products
 // Query params: category, brand, is_active, search, page, limit
 export async function GET(req: Request) {
+  const admin = await getAdminFromRequest(req)
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(req.url)
 
@@ -57,6 +63,11 @@ export async function GET(req: Request) {
 
 
 export async function POST(req: Request) {
+  const admin = await getAdminFromRequest(req)
+  if (!admin) {
+     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  
   try {
     const body = await req.json()
 
@@ -96,10 +107,10 @@ const product = await prisma.product.create({
     category,
     subcategory: subcategory || null,
     brand:       brand       || null,
-    base_price,
+    base_price: parseFloat(base_price),
     color:       color       || null,
     size:        size        || null,
-    stock:       stock       || 0,
+    stock: parseInt(stock) || 0,
     barcode:     barcode     || null,
     images:      images      || [],
     product_code,
