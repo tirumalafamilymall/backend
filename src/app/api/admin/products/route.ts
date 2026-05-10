@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4 } from 'uuid' // <-- Make sure this is here!
 import { generateSlug } from '@/lib/slug'
 import { getAdminFromRequest } from '@/lib/auth'
 
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
-const where: any = {
+    const where: any = {
       is_deleted: false,
       ...(category  && { category: { contains: category, mode: 'insensitive' } }),
       ...(brand     && { brand:    { contains: brand,    mode: 'insensitive' } }),
@@ -74,6 +74,7 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     const {
+      product_code: custom_code,
       name,
       category,
       subcategory,
@@ -93,32 +94,35 @@ export async function POST(req: Request) {
       )
     }
 
-// To this:
-if (isNaN(Number(base_price)) || Number(base_price) <= 0) {
-  return NextResponse.json(
-    { error: 'Invalid base_price' },
-    { status: 400 }
-  )
-}
+    if (isNaN(Number(base_price)) || Number(base_price) <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid base_price' },
+        { status: 400 }
+      )
+    }
 
-const product_code = `PROD-${uuidv4()}`
+    // THIS IS THE MISSING LOGIC!
+    // If the user typed a code, use it. Otherwise, auto-generate.
+    const final_product_code = (custom_code && custom_code.trim() !== '') 
+      ? custom_code.trim().toUpperCase() 
+      : `PROD-${uuidv4().substring(0, 8).toUpperCase()}`
 
-const product = await prisma.product.create({
-  data: {
-    name,
-    category,
-    subcategory: subcategory || null,
-    brand:       brand       || null,
-    base_price: parseFloat(base_price),
-    color:       color       || null,
-    size:        size        || null,
-    stock: parseInt(stock) || 0,
-    barcode:     barcode     || null,
-    images:      images      || [],
-    product_code,
-    slug: generateSlug(name, product_code),
-  },
-})
+    const product = await prisma.product.create({
+      data: {
+        name,
+        category,
+        subcategory: subcategory || null,
+        brand:       brand       || null,
+        base_price: parseFloat(base_price),
+        color:       color       || null,
+        size:        size        || null,
+        stock: parseInt(stock) || 0,
+        barcode:     barcode     || null,
+        images:      images      || [],
+        product_code: final_product_code, // Now it knows what this variable is!
+        slug: generateSlug(name, final_product_code), 
+      },
+    })
 
     return NextResponse.json({ success: true, product })
   } catch (error) {
