@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-import { getAdminFromRequest } from '@/lib/auth' // Add this import
-
+// GET /api/admin/users
+// Query params: search, page, limit
 export async function GET(req: Request) {
-  // FIX: Verify admin before running prisma code
-  const admin = await getAdminFromRequest(req)
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   try {
     const { searchParams } = new URL(req.url)
 

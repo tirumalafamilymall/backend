@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-import { getAdminFromRequest } from '@/lib/auth' // Add this import
-
-export async function GET(req: Request) {
-  // FIX: Verify admin before running prisma code
-  const admin = await getAdminFromRequest(req)
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+// GET /api/admin/insta-live — list all (including inactive)
+export async function GET() {
   try {
     const posts = await prisma.instaLive.findMany({
       orderBy: { created_at: 'desc' },
