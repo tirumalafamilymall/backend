@@ -22,13 +22,14 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
-    const where: any = {
+const where: any = {
       is_deleted: false,
       ...(category  && { category: { contains: category, mode: 'insensitive' } }),
       ...(brand     && { brand:    { contains: brand,    mode: 'insensitive' } }),
-      ...(is_active !== null && is_active !== undefined && {
-        is_active: is_active === 'true',
-      }),
+      
+      ...(is_active === 'true' && { is_active: true }),
+      ...(is_active === 'false' && { is_active: false }),
+      
       ...(search && {
         OR: [
           { name:         { contains: search, mode: 'insensitive' } },

@@ -34,27 +34,21 @@ export async function POST(
   }
 }
 
-// DELETE /api/admin/insta-live/:id/products — unlink a product
-// Body: { product_id }
+// DELETE /api/admin/insta-live/:id/products/:productId
 export async function DELETE(
   req: Request,
-  _context: { params: Promise<{ id: string }> }
+  _context: { params: Promise<{ id: string, productId: string }> }
 ) {
   const params = await _context.params
   try {
-    const { product_id } = await req.json()
-
-    if (!product_id) {
-      return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
-    }
-
     await prisma.instaLiveProduct.deleteMany({
-      where: { insta_live_id: params.id, product_id },
+      where: { 
+        insta_live_id: params.id, 
+        product_id: params.productId 
+      },
     })
-
     return NextResponse.json({ success: true, message: 'Product unlinked' })
   } catch (error) {
-    console.error(error)
     return NextResponse.json({ error: 'Failed to unlink product' }, { status: 500 })
   }
 }
