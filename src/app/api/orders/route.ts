@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { generateOrderNumber, calculateCartTotal } from '@/lib/order'
-import { sendOrderConfirmationMail } from '@/lib/mailer'
 
 export async function GET(req: Request) {
   try {
@@ -62,59 +61,35 @@ export async function POST(req: Request) {
     const cart_subtotal = await calculateCartTotal(cart.id)
     const total_amount = cart_subtotal + Number(shipping_amount)
 
-const order = await prisma.$transaction(async (tx) => {
-      const newOrder = await tx.order.create({
-        data: {
-          order_number:    generateOrderNumber(),
-          user_id:         user.id,
-          total_amount,    // Correct Total (Products + Shipping)
-          shipping_amount: Number(shipping_amount), // Log shipping separately
-          shipping_address,
-          notes:           notes || null,
-          status:          'PENDING',
-          payment_status:  'UNPAID',
-          items: {
-            create: cart.items.map((item) => ({
-              product_id:   item.product_id,
-              product_code: item.product.product_code,
-              name:         item.product.name,
-              category:     item.product.category,
-              brand:        item.product.brand || null,
-              color:        item.product.color || null,
-              size:         item.product.size  || null,
-              price:        item.product.base_price,
-              quantity:     item.quantity,
-              image:        item.product.images?.[0] || null,
-            })),
-          },
+// Replace the entire prisma.$transaction block with this:
+    const order = await prisma.order.create({
+      data: {
+        order_number:    generateOrderNumber(),
+        user_id:         user.id,
+        total_amount,    
+        shipping_amount: Number(shipping_amount), 
+        shipping_address,
+        notes:           notes || null,
+        status:          'PENDING',
+        payment_status:  'UNPAID',
+        items: {
+          create: cart.items.map((item) => ({
+            product_id:   item.product_id,
+            product_code: item.product.product_code,
+            name:         item.product.name,
+            category:     item.product.category,
+            brand:        item.product.brand || null,
+            color:        item.product.color || null,
+            size:         item.product.size  || null,
+            price:        item.product.base_price,
+            quantity:     item.quantity,
+            image:        item.product.images?.[0] || null,
+          })),
         },
-        include: { items: true },
-      })
-
-      await Promise.all(
-        cart.items.map((item) =>
-          tx.product.update({
-            where: { id: item.product_id },
-            data:  { stock: { decrement: item.quantity } },
-          })
-        )
-      )
-
-      await tx.cartItem.deleteMany({ where: { cart_id: cart.id } })
-
-      return newOrder
+      },
+      include: { items: true },
     })
 
-    if (user.email) {
-      sendOrderConfirmationMail({
-        customerEmail:   user.email,
-        customerName:    user.name || 'Customer',
-        orderNumber:     order.order_number,
-        items:           order.items,
-        totalAmount:     order.total_amount,
-        shippingAddress: shipping_address,
-      }).catch(console.error)
-    }
 
     return NextResponse.json({ success: true, order }, { status: 201 })
   } catch (error) {
