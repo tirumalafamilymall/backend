@@ -68,7 +68,10 @@ model Order {
   order_number        String        @unique
   user_id             String
   status              OrderStatus   @default(PENDING)
+  
   total_amount        Float
+  shipping_amount     Float         @default(0)   // <--- Added this line
+  
   payment_status      PaymentStatus @default(UNPAID)
   payment_id          String?
   razorpay_order_id   String?
