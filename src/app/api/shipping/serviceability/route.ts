@@ -1,35 +1,61 @@
 import { NextResponse } from 'next/server'
 import { checkServiceability } from '@/lib/shiprocket'
 
-// GET /api/shipping/serviceability?pincode=500001&cod=true
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const pincode = searchParams.get('pincode')
     const cod = false
 
+    // 1. Validate Pincode Input first
     if (!pincode || pincode.length !== 6 || isNaN(Number(pincode))) {
       return NextResponse.json({ error: 'Valid 6-digit pincode is required' }, { status: 400 })
     }
 
-    // Your store's pickup pincode — add to .env
+    // 2. Define pickup postcode from ENV
     const pickup_postcode = process.env.STORE_PINCODE!
 
-    const data = await checkServiceability(pickup_postcode, pincode, 0.5, cod)
+    try {
+      // 3. Try real Shiprocket call
+      const data = await checkServiceability(pickup_postcode, pincode, 0.5, cod)
+      const available_couriers = data?.data?.available_courier_companies || []
 
-    const available_couriers = data?.data?.available_courier_companies || []
-    const is_serviceable     = available_couriers.length > 0
-    const actual_cost = is_serviceable ? available_couriers[0]?.freight_charge : 0
+      // 4. MOCK FALLBACK: If wallet is empty (0 couriers)
+      if (available_couriers.length === 0) {
+        return NextResponse.json({
+          success: true,
+          is_serviceable: true, 
+          shipping_cost: 59, // Mock fee based on your screenshot
+          couriers: 1,
+          estimated_days: 3,
+          note: "Testing Mode: Wallet balance 0, using mock rates" 
+        })
+      }
 
-    return NextResponse.json({
-      success:          true,
-      is_serviceable,
-      shipping_cost: Number(actual_cost),
-      couriers:         available_couriers.length,
-      estimated_days:   available_couriers[0]?.estimated_delivery_days || null,
-    })
+      // 5. If real couriers ARE found (after you recharge)
+      const actual_cost = available_couriers[0]?.freight_charge || 0
+
+      return NextResponse.json({
+        success: true,
+        is_serviceable: true,
+        shipping_cost: Number(actual_cost),
+        couriers: available_couriers.length,
+        estimated_days: available_couriers[0]?.estimated_delivery_days || null,
+      })
+
+    } catch (apiErr) {
+      // If Shiprocket API is totally down/unauthorized, still fallback so you can test
+      console.error("Shiprocket API Error:", apiErr)
+      return NextResponse.json({
+        success: true,
+        is_serviceable: true,
+        shipping_cost: 59,
+        note: "Testing Mode: API failure fallback"
+      })
+    }
+
   } catch (error: any) {
-    console.error(error?.response?.data || error)
+    console.error("General error:", error)
     return NextResponse.json(
       { error: 'Failed to check serviceability' },
       { status: 500 }

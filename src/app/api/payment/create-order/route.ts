@@ -14,6 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'order_id is required' }, { status: 400 })
     }
 
+    // 1. Fetch the order and ensure it belongs to the user
     const order = await prisma.order.findFirst({
       where: { id: order_id, user_id: user.id },
     })
@@ -26,8 +27,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Order already paid' }, { status: 400 })
     }
 
+    // 2. Convert amount to Paisa (Razorpay requirement: ₹1 = 100 Paisa)
+    const amountInPaisa = Math.round(order.total_amount * 100)
+
+    console.log(`💳 Creating Razorpay Order for TFM Order: ${order.order_number}`)
+    console.log(`💰 Total Amount: ₹${order.total_amount} (${amountInPaisa} Paisa)`)
+
+    // 3. Create the Razorpay Order
     const razorpayOrder = await razorpay.orders.create({
-      amount:   Math.round(order.total_amount * 100),
+      amount:   amountInPaisa,
       currency: 'INR',
       receipt:  order.order_number,
       notes: {
@@ -36,20 +44,22 @@ export async function POST(req: Request) {
       },
     })
 
+    // 4. Store the Razorpay ID in our database
     await prisma.order.update({
       where: { id: order.id },
       data:  { razorpay_order_id: razorpayOrder.id },
     })
 
+    // 5. Return everything the frontend needs to open the popup
     return NextResponse.json({
       success:           true,
       razorpay_order_id: razorpayOrder.id,
       amount:            razorpayOrder.amount,
       currency:          razorpayOrder.currency,
-      key_id:            process.env.RAZORPAY_KEY_ID,
+      key_id:            process.env.RAZORPAY_KEY_ID, // Send the key used for initialization
     })
-  } catch (error) {
-    console.error(error)
+  } catch (error: any) {
+    console.error("❌ Razorpay Order Creation Failed:", error)
     return NextResponse.json({ error: 'Failed to create payment order' }, { status: 500 })
   }
 }
