@@ -28,10 +28,11 @@ export async function POST(req: Request) {
     }
 
     // 2. Convert amount to Paisa (Razorpay requirement: ₹1 = 100 Paisa)
-    const amountInPaisa = Math.round(order.total_amount * 100)
+    // CHANGED: Explicitly cast Decimal to Number
+    const amountInPaisa = Math.round(Number(order.total_amount) * 100)
 
     console.log(`💳 Creating Razorpay Order for TFM Order: ${order.order_number}`)
-    console.log(`💰 Total Amount: ₹${order.total_amount} (${amountInPaisa} Paisa)`)
+    console.log(`💰 Total Amount: ₹${Number(order.total_amount)} (${amountInPaisa} Paisa)`)
 
     // 3. Create the Razorpay Order
     const razorpayOrder = await razorpay.orders.create({
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
       razorpay_order_id: razorpayOrder.id,
       amount:            razorpayOrder.amount,
       currency:          razorpayOrder.currency,
-      key_id:            process.env.RAZORPAY_KEY_ID, // Send the key used for initialization
+      key_id:            process.env.RAZORPAY_KEY_ID, 
     })
   } catch (error: any) {
     console.error("❌ Razorpay Order Creation Failed:", error)

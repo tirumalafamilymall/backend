@@ -18,28 +18,77 @@ model User {
   wishlist     Wishlist?
 }
 
+// ─── ENUMS ──────────────────────────────────────────────────
+
+enum Department {
+  WOMEN
+  MEN
+  KIDS
+}
+
+enum SalesChannel {
+  MAIN_STORE
+  INSTA_LIVE
+}
+
+// ─── THE PARENT BLUEPRINT ───────────────────────────────────
+
 model Product {
   id                  String             @id @default(uuid())
   product_code        String             @unique
   name                String
+  department          Department
   category            String
   subcategory         String?
   brand               String?
-  base_price          Float
-  color               String?
-  size                String?
-  stock               Int                @default(0)
-  barcode             String?
   images              String[]
   is_active           Boolean            @default(true)
-  is_deleted  Boolean @default(false)
+  is_deleted          Boolean            @default(false)
+  sales_channel       SalesChannel       @default(MAIN_STORE)
+  slug                String             @unique // MADE REQUIRED
   created_at          DateTime           @default(now())
   updated_at          DateTime           @updatedAt
-  slug                String?            @unique
-  cart_items          CartItem[]
+  
+  variants            ProductVariant[]
   insta_live_products InstaLiveProduct[]
   wishlist_items      WishlistItem[]
+  order_items         OrderItem[]        
+
+  // INDEXES FOR FAST FILTERING
+  @@index([department])
+  @@index([category])
+  @@index([subcategory])
+  @@index([brand])
+  @@index([sales_channel])
+  @@index([is_active])
+  @@index([is_deleted])
+  @@index([name])
 }
+
+// ─── THE CHILD PHYSICAL ITEM ────────────────────────────────
+
+model ProductVariant {
+  id          String      @id @default(uuid())
+  product_id  String
+  sku         String      @unique // ADDED FOR INVENTORY/BARCODES
+  size        String?
+  color       String?
+  base_price  Decimal     @db.Decimal(10,2) // DECIMAL FOR EXACT CURRENCY
+  stock       Int         @default(0)
+  barcode     String?
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+
+  product     Product     @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  cart_items  CartItem[]
+  order_items OrderItem[]
+
+  @@index([product_id])
+  @@index([stock])
+  @@unique([product_id, size, color])
+}
+
+// ─── CART & ORDERS ──────────────────────────────────────────
 
 model Cart {
   id         String     @id @default(uuid())
@@ -51,16 +100,17 @@ model Cart {
 }
 
 model CartItem {
-  id         String   @id @default(uuid())
+  id         String         @id @default(uuid())
   cart_id    String
-  product_id String
-  quantity   Int      @default(1)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  cart       Cart     @relation(fields: [cart_id], references: [id])
-  product    Product  @relation(fields: [product_id], references: [id])
+  variant_id String         
+  quantity   Int            @default(1)
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+  
+  cart       Cart           @relation(fields: [cart_id], references: [id], onDelete: Cascade) // CASCADE DELETE ADDED
+  variant    ProductVariant @relation(fields: [variant_id], references: [id], onDelete: Cascade)
 
-  @@unique([cart_id, product_id])
+  @@unique([cart_id, variant_id])
 }
 
 model Order {
@@ -68,10 +118,8 @@ model Order {
   order_number        String        @unique
   user_id             String
   status              OrderStatus   @default(PENDING)
-  
-  total_amount        Float
-  shipping_amount     Float         @default(0)   // <--- Added this line
-  
+  total_amount        Decimal       @db.Decimal(10,2) // DECIMAL
+  shipping_amount     Decimal       @db.Decimal(10,2) @default(0) // DECIMAL
   payment_status      PaymentStatus @default(UNPAID)
   payment_id          String?
   razorpay_order_id   String?
@@ -81,26 +129,38 @@ model Order {
   notes               String?
   created_at          DateTime      @default(now())
   updated_at          DateTime      @updatedAt
+  
   user                User          @relation(fields: [user_id], references: [id])
   items               OrderItem[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([payment_status])
+  @@index([created_at])
 }
 
 model OrderItem {
-  id           String   @id @default(uuid())
+  id           String          @id @default(uuid())
   order_id     String
-  product_id   String
+  product_id   String          
+  variant_id   String?         
   product_code String
   name         String
   category     String
   brand        String?
   color        String?
   size         String?
-  price        Float
+  price        Decimal         @db.Decimal(10,2) // DECIMAL
   quantity     Int
   image        String?
-  created_at   DateTime @default(now())
-  order        Order    @relation(fields: [order_id], references: [id])
+  created_at   DateTime        @default(now())
+  
+  order        Order           @relation(fields: [order_id], references: [id])
+  product      Product         @relation(fields: [product_id], references: [id])
+  variant      ProductVariant? @relation(fields: [variant_id], references: [id])
 }
+
+// ─── INSTA LIVE & WISHLIST ──────────────────────────────────
 
 model InstaLive {
   id            String             @id @default(uuid())
@@ -116,7 +176,8 @@ model InstaLive {
 model InstaLiveProduct {
   id            String    @id @default(uuid())
   insta_live_id String
-  product_id    String
+  product_id    String    
+  
   insta_live    InstaLive @relation(fields: [insta_live_id], references: [id], onDelete: Cascade)
   product       Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
@@ -135,13 +196,16 @@ model Wishlist {
 model WishlistItem {
   id          String   @id @default(uuid())
   wishlist_id String
-  product_id  String
+  product_id  String   
   created_at  DateTime @default(now())
-  product     Product  @relation(fields: [product_id], references: [id])
-  wishlist    Wishlist @relation(fields: [wishlist_id], references: [id])
+  
+  product     Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  wishlist    Wishlist @relation(fields: [wishlist_id], references: [id], onDelete: Cascade)
 
   @@unique([wishlist_id, product_id])
 }
+
+// ─── STATUS ENUMS ───────────────────────────────────────────
 
 enum OrderStatus {
   PENDING

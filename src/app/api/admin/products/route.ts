@@ -1,16 +1,14 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { v4 as uuidv4 } from 'uuid' // <-- Make sure this is here!
+import { v4 as uuidv4 } from 'uuid'
 import { generateSlug } from '@/lib/slug'
 import { getAdminFromRequest } from '@/lib/auth'
+import { Department } from '@prisma/client'
 
 // GET /api/admin/products
-// Query params: category, brand, is_active, search, page, limit
 export async function GET(req: Request) {
   const admin = await getAdminFromRequest(req)
-  if (!admin) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
     const { searchParams } = new URL(req.url)
@@ -26,29 +24,43 @@ export async function GET(req: Request) {
       is_deleted: false,
       ...(category  && { category: { contains: category, mode: 'insensitive' } }),
       ...(brand     && { brand:    { contains: brand,    mode: 'insensitive' } }),
-      
       ...(is_active === 'true' && { is_active: true }),
       ...(is_active === 'false' && { is_active: false }),
-      
       ...(search && {
         OR: [
           { name:         { contains: search, mode: 'insensitive' } },
           { product_code: { contains: search, mode: 'insensitive' } },
-          { barcode:      { contains: search, mode: 'insensitive' } },
           { brand:        { contains: search, mode: 'insensitive' } },
         ],
       }),
     }
 
-    const [products, total] = await Promise.all([
+    const [rawProducts, total] = await Promise.all([
       prisma.product.findMany({
         where,
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: { variants: true } // Fetch the child variants!
       }),
       prisma.product.count({ where }),
     ])
+
+    // Flatten the data for the current UI table
+    const products = rawProducts.map(p => {
+      const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
+      const basePrice = p.variants.length > 0 ? Number(p.variants[0].base_price) : 0
+      
+      return {
+        ...p,
+        stock: totalStock,
+        base_price: basePrice,
+        // Grab the first variant's details for the simple edit form
+        color: p.variants[0]?.color || '',
+        size: p.variants[0]?.size || '',
+        barcode: p.variants[0]?.barcode || ''
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -63,12 +75,10 @@ export async function GET(req: Request) {
   }
 }
 
-
+// POST /api/admin/products
 export async function POST(req: Request) {
   const admin = await getAdminFromRequest(req)
-  if (!admin) {
-     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   
   try {
     const body = await req.json()
@@ -76,6 +86,7 @@ export async function POST(req: Request) {
     const {
       product_code: custom_code,
       name,
+      department, // NEW REQUIRED FIELD
       category,
       subcategory,
       brand,
@@ -87,41 +98,50 @@ export async function POST(req: Request) {
       images,
     } = body
 
-    if (!name || !category || !base_price) {
+    if (!name || !category || !base_price || !department) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, category, base_price' },
+        { error: 'Missing required fields: name, department, category, base_price' },
         { status: 400 }
       )
+    }
+
+    if (!['WOMEN', 'MEN', 'KIDS'].includes(department.toUpperCase())) {
+      return NextResponse.json({ error: 'Invalid department. Must be WOMEN, MEN, or KIDS.' }, { status: 400 })
     }
 
     if (isNaN(Number(base_price)) || Number(base_price) <= 0) {
-      return NextResponse.json(
-        { error: 'Invalid base_price' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid base_price' }, { status: 400 })
     }
 
-    // THIS IS THE MISSING LOGIC!
-    // If the user typed a code, use it. Otherwise, auto-generate.
     const final_product_code = (custom_code && custom_code.trim() !== '') 
       ? custom_code.trim().toUpperCase() 
       : `PROD-${uuidv4().substring(0, 8).toUpperCase()}`
 
+    const fallbackSku = `${final_product_code}-${size || 'BASE'}-${color || 'BASE'}`.replace(/\s+/g, '').toUpperCase()
+
+    // Create Parent AND Child simultaneously
     const product = await prisma.product.create({
       data: {
+        product_code: final_product_code,
         name,
+        department:   department.toUpperCase() as Department,
         category,
-        subcategory: subcategory || null,
-        brand:       brand       || null,
-        base_price: parseFloat(base_price),
-        color:       color       || null,
-        size:        size        || null,
-        stock: parseInt(stock) || 0,
-        barcode:     barcode     || null,
-        images:      images      || [],
-        product_code: final_product_code, // Now it knows what this variable is!
-        slug: generateSlug(name, final_product_code), 
+        subcategory:  subcategory || null,
+        brand:        brand       || null,
+        images:       images      || [],
+        slug:         generateSlug(name, final_product_code), 
+        variants: {
+          create: {
+            base_price: parseFloat(base_price),
+            stock:      parseInt(stock) || 0,
+            color:      color   || null,
+            size:       size    || null,
+            barcode:    barcode || null,
+            sku:        fallbackSku
+          }
+        }
       },
+      include: { variants: true }
     })
 
     return NextResponse.json({ success: true, product })

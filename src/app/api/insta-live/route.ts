@@ -1,47 +1,53 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/insta-live — homepage grid (active posts only, no products)
-// GET /api/insta-live?with_products=true — Shop Instagram page (products included)
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const with_products = searchParams.get('with_products') === 'true'
 
-    const posts = await prisma.instaLive.findMany({
+    const rawPosts = await prisma.instaLive.findMany({
       where: { is_active: true },
       orderBy: { created_at: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        instagram_url: true,
-        thumbnail: true,
-        created_at: true,
-        ...(with_products && {
-          products: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  base_price: true,
-                  images: true,
-                  category: true,
-                  stock: true,
-                  is_active: true,
-                },
-              },
-            },
-          },
-        }),
-      },
+      include: {
+        products: {
+          include: {
+            product: {
+              include: { variants: true } // Fetch variants for price/stock
+            }
+          }
+        }
+      }
     })
 
-    // For Shop Instagram page: flatten all unique products across all posts
+    // Process posts to include aggregated product data
+    const posts = rawPosts.map(post => ({
+      ...post,
+      products: post.products.map(link => {
+        const p = link.product
+        const prices = p.variants.map(v => Number(v.base_price))
+        const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
+        
+        return {
+          ...link,
+          product: {
+            id: p.id,
+            slug: p.slug,
+            name: p.name,
+            images: p.images,
+            category: p.category,
+            base_price: prices.length > 0 ? Math.min(...prices) : 0,
+            stock: totalStock,
+            is_active: p.is_active
+          }
+        }
+      })
+    }))
+
     if (with_products) {
       const productMap = new Map()
       for (const post of posts) {
-        for (const link of (post as any).products || []) {
+        for (const link of post.products) {
           if (link.product.is_active) {
             productMap.set(link.product.id, link.product)
           }

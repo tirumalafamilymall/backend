@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 
-// PATCH /api/cart/:itemId — update quantity
 export async function PATCH(
   req: Request,
   _context: { params: Promise<{ itemId: string }> }
@@ -18,7 +17,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Quantity must be at least 1' }, { status: 400 })
     }
 
-    // Verify item belongs to this user's cart
     const cart = await prisma.cart.findUnique({ where: { user_id: user.id } })
     if (!cart) return NextResponse.json({ error: 'Cart not found' }, { status: 404 })
 
@@ -27,10 +25,11 @@ export async function PATCH(
     })
     if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
+    // CHANGED: Include the variant and parent product for the frontend
     const updated = await prisma.cartItem.update({
       where: { id: params.itemId },
       data: { quantity },
-      include: { product: true},
+      include: { variant: { include: { product: true } } }, 
     })
 
     return NextResponse.json({ success: true, item: updated })
@@ -40,7 +39,6 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/cart/:itemId — remove single item
 export async function DELETE(
   req: Request,
   _context: { params: Promise<{ itemId: string }> }

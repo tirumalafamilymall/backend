@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Department } from '@prisma/client'
 
-// GET /api/products
-// Query params:
-//   category, subcategory, brand, color, size  → filters
-//   min_price, max_price                        → price range
-//   in_stock                                    → true/false
-//   search                                      → name/brand keyword
-//   sort                                        → price_asc, price_desc, newest
-//   page, limit                                 → pagination
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
 
+    const department  = searchParams.get('department')
     const category    = searchParams.get('category')
     const subcategory = searchParams.get('subcategory')
     const brand       = searchParams.get('brand')
@@ -26,57 +20,73 @@ export async function GET(req: Request) {
     const page        = parseInt(searchParams.get('page') || '1')
     const limit       = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
 
+    // Build the Variant Filter (Since price, stock, size, color live here now)
+    const variantFilter: any = {}
+    if (color) variantFilter.color = { equals: color, mode: 'insensitive' }
+    if (size) variantFilter.size = { equals: size, mode: 'insensitive' }
+    if (in_stock === 'true') variantFilter.stock = { gt: 0 }
+    if (min_price || max_price) {
+      variantFilter.base_price = {
+        ...(min_price && { gte: parseFloat(min_price) }),
+        ...(max_price && { lte: parseFloat(max_price) }),
+      }
+    }
+
     const where: any = {
       is_active: true,
-      ...(category    && { category:    { equals: category,    mode: 'insensitive' } }),
+      is_deleted: false,
+      sales_channel: 'MAIN_STORE', // <-- HIDES INSTA LIVE PRODUCTS
+      ...(department  && { department: department.toUpperCase() as Department }),
+      ...(category    && { category: { equals: category, mode: 'insensitive' } }),
       ...(subcategory && { subcategory: { equals: subcategory, mode: 'insensitive' } }),
-      ...(brand       && { brand:       { equals: brand,       mode: 'insensitive' } }),
-      ...(color       && { color:       { equals: color,       mode: 'insensitive' } }),
-      ...(size        && { size:        { equals: size,        mode: 'insensitive' } }),
-      ...(in_stock === 'true' && { stock: { gt: 0 } }),
-      ...((min_price || max_price) && {
-        base_price: {
-          ...(min_price && { gte: parseFloat(min_price) }),
-          ...(max_price && { lte: parseFloat(max_price) }),
-        },
-      }),
+      ...(brand       && { brand: { equals: brand, mode: 'insensitive' } }),
       ...(search && {
         OR: [
-          { name:  { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
           { brand: { contains: search, mode: 'insensitive' } },
           { category: { contains: search, mode: 'insensitive' } },
         ],
       }),
+      // Only return products that have AT LEAST ONE variant matching the filters
+      ...(Object.keys(variantFilter).length > 0 && {
+        variants: { some: variantFilter }
+      })
     }
 
-    const orderBy =
-      sort === 'price_asc'  ? { base_price: 'asc'  as const } :
-      sort === 'price_desc' ? { base_price: 'desc' as const } :
-                              { created_at: 'desc' as const }
-
-    const [products, total] = await Promise.all([
+    const [rawProducts, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy,
+        orderBy: { created_at: 'desc' }, // Sorting by price requires an aggregate workaround, sticking to newest for now
         skip: (page - 1) * limit,
         take: limit,
-        select: {
-          id:           true,
-          product_code: true,
-          name:         true,
-          category:     true,
-          subcategory:  true,
-          brand:        true,
-          base_price:   true,
-          color:        true,
-          size:         true,
-          stock:        true,
-          images:       true,
-          created_at:   true,
-        },
+        include: { variants: true } // Fetch variants to calculate display price/stock
       }),
       prisma.product.count({ where }),
     ])
+
+    // Format for the frontend UI (aggregate variant data)
+    let products = rawProducts.map(p => {
+      const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
+      // Find the lowest price among variants to show "Starts at ₹X"
+      const prices = p.variants.map(v => Number(v.base_price))
+      const basePrice = prices.length > 0 ? Math.min(...prices) : 0
+
+      return {
+        id:           p.id,
+        slug:         p.slug,
+        product_code: p.product_code,
+        name:         p.name,
+        category:     p.category,
+        brand:        p.brand,
+        images:       p.images,
+        base_price:   basePrice,
+        stock:        totalStock,
+      }
+    })
+
+    // Custom sorting since price is on child variants
+    if (sort === 'price_asc')  products.sort((a, b) => a.base_price - b.base_price)
+    if (sort === 'price_desc') products.sort((a, b) => b.base_price - a.base_price)
 
     return NextResponse.json({
       success: true,

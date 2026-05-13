@@ -1,27 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { parseExcelBuffer } from '@/lib/excel'
-import { v4 as uuidv4 } from 'uuid'
 import { generateSlug } from '@/lib/slug'
+import { Department } from '@prisma/client'
 
 export const maxDuration = 60
 
-// POST /api/admin/products/excel
 export async function POST(req: Request) {
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
-    }
+    if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const ext = file.name.split('.').pop()?.toLowerCase()
     if (!['xlsx', 'xls', 'csv'].includes(ext || '')) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Only .xlsx, .xls, .csv allowed' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid file type. Only .xlsx, .xls, .csv allowed' }, { status: 400 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -35,114 +29,121 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
-    // ── Step 1: Separate products into updates vs creates ──────────────────
-    const toUpdate: typeof products = []
-    const toCreate: typeof products = []
-
-    // Only check for existing codes if any products have a code
-    const codesInFile = products.map(p => p.product_code).filter(Boolean) as string[]
-
-    // Fetch all existing products with those codes in ONE query
-    const existingProducts = codesInFile.length > 0
-      ? await prisma.product.findMany({
-          where: { product_code: { in: codesInFile } },
-          select: { product_code: true },
-        })
-      : []
-
-    const existingCodes = new Set(existingProducts.map(p => p.product_code))
+    // ── Step 1: Group flat rows into Parent -> Variants ──────────────────
+    const groupedProducts = new Map<string, any>()
 
     for (const item of products) {
-      if (item.product_code && existingCodes.has(item.product_code)) {
-        toUpdate.push(item)
-      } else {
-        toCreate.push(item)
+      const code = item.product_code
+      if (!groupedProducts.has(code)) {
+        // First time seeing this code: Set up the Parent Blueprint
+        groupedProducts.set(code, {
+          parentData: {
+            product_code: code,
+            name:         item.name,
+            department:   item.department as Department,
+            category:     item.category,
+            subcategory:  item.subcategory,
+            brand:        item.brand,
+            slug:         generateSlug(item.name, code),
+          },
+          variants: []
+        })
       }
+
+      // Generate a fallback SKU if not provided in Excel
+      const fallbackSku = `${code}-${item.size || 'BASE'}-${item.color || 'BASE'}`.replace(/\s+/g, '').toUpperCase()
+
+      // Add this specific row as a Child Variant
+      groupedProducts.get(code).variants.push({
+        size:       item.size,
+        color:      item.color,
+        base_price: item.base_price,
+        stock:      item.stock,
+        sku:        item.sku || fallbackSku,
+        barcode:    item.barcode,
+      })
     }
 
-    // ── Step 2: Bulk CREATE with createMany (single DB round trip) ─────────
-    let created = 0
-    const createFailures: any[] = []
+    // ── Step 2: Process Database Upserts ─────────────────────────────────
+    let parentProcessed = 0
+    let variantsProcessed = 0
+    const failedRows: any[] = []
 
-    if (toCreate.length > 0) {
+    // We process sequentially to catch individual errors gracefully
+    for (const [code, group] of groupedProducts.entries()) {
       try {
-        const createData = toCreate.map(item => {
-          const code = item.product_code || `PROD-${uuidv4()}`
-          return {
-            name:         item.name,
-            category:     item.category,
-            subcategory:  item.subcategory  || null,
-            brand:        item.brand        || null,
-            base_price:   item.base_price,
-            stock:        item.stock        || 0,
-            color:        item.color        || null,
-            size:         item.size         || null,
-            barcode:      item.barcode      || null,
-            images:       item.images       || [],
-            product_code: code,
-            slug:         generateSlug(item.name, code),
+        // A. Upsert the Parent Blueprint
+        const parent = await prisma.product.upsert({
+          where: { product_code: code },
+          create: group.parentData,
+          update: {
+            name:        group.parentData.name,
+            department:  group.parentData.department,
+            category:    group.parentData.category,
+            subcategory: group.parentData.subcategory,
+            brand:       group.parentData.brand,
           }
         })
+        parentProcessed++
 
-        const result = await prisma.product.createMany({
-          data: createData,
-          skipDuplicates: true,
-        })
+        // B. Upsert the Child Variants
+        for (const v of group.variants) {
+          // Because Prisma compound unique upserts with nulls can be tricky,
+          // we explicitly find the variant first to decide whether to create or update.
+          const existingVariant = await prisma.productVariant.findFirst({
+            where: {
+              product_id: parent.id,
+              size: v.size,
+              color: v.color
+            }
+          })
 
-        created = result.count
+          if (existingVariant) {
+            await prisma.productVariant.update({
+              where: { id: existingVariant.id },
+              data: {
+                base_price: v.base_price,
+                stock:      v.stock, // In real life, you might want { increment: v.stock }, but overwrite is safer for Excel syncs
+                sku:        v.sku,
+                barcode:    v.barcode
+              }
+            })
+          } else {
+            await prisma.productVariant.create({
+              data: {
+                product_id: parent.id,
+                size:       v.size,
+                color:      v.color,
+                base_price: v.base_price,
+                stock:      v.stock,
+                sku:        v.sku,
+                barcode:    v.barcode
+              }
+            })
+          }
+          variantsProcessed++
+        }
       } catch (err: any) {
-        console.error('createMany failed:', err)
-        createFailures.push({ error: err.message || 'Bulk create failed' })
+        console.error(`Failed processing group ${code}:`, err)
+        failedRows.push({ product_code: code, error: err.message })
       }
     }
-
-    // ── Step 3: UPDATE existing products (loop — these are rare) ──────────
-    let updated = 0
-    const updateFailures: any[] = []
-
-    for (const item of toUpdate) {
-      try {
-        await prisma.product.update({
-          where: { product_code: item.product_code! },
-          data: {
-            name:        item.name,
-            category:    item.category,
-            subcategory: item.subcategory || null,
-            brand:       item.brand       || null,
-            base_price:  item.base_price,
-            stock:       item.stock       || 0,
-            color:       item.color       || null,
-            size:        item.size        || null,
-            barcode:     item.barcode     || null,
-          },
-        })
-        updated++
-      } catch (err: any) {
-        console.error('update failed:', err)
-        updateFailures.push({ error: err.message || 'Update failed', item })
-      }
-    }
-
-    const allFailures = [...createFailures, ...updateFailures]
 
     return NextResponse.json({
       success: true,
       summary: {
-        total_rows:   products.length,
-        created,
-        updated,
-        failed:       allFailures.length,
+        total_excel_rows: products.length,
+        parents_processed: parentProcessed,
+        variants_processed: variantsProcessed,
+        failed: failedRows.length,
         parse_errors: parseErrors.length,
       },
       parse_errors: parseErrors,
-      failed_rows:  allFailures,
+      failed_rows: failedRows,
     })
 
   } catch (error) {
     console.error(error)
-    return NextResponse.json(
-      { error: 'Excel upload failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Excel upload failed' }, { status: 500 })
   }
 }

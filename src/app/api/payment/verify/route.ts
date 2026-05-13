@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyRazorpaySignature } from '@/lib/razorpay'
 import { getUserFromRequest } from '@/lib/auth'
-import { sendOrderConfirmationMail } from '@/lib/mailer' // <-- ADDED IMPORT
+import { sendOrderConfirmationMail } from '@/lib/mailer'
+import { createShiprocketOrder, generateAWB } from '@/lib/shiprocket' 
 
 // POST /api/payment/verify
-// Called after Razorpay checkout succeeds on frontend
-// Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id }
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req)
@@ -47,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Order already paid' }, { status: 400 })
     }
 
-    const updated = await prisma.order.update({
+    let updated = await prisma.order.update({
       where: { id: order.id },
       data: {
         payment_status: 'PAID',
@@ -58,13 +57,17 @@ export async function POST(req: Request) {
     })
 
     // 1. Deduct stock NOW that payment is successful
+    // CHANGED: Deduct from the specific Variant, not the Parent
     await Promise.all(
-      updated.items.map((item) =>
-        prisma.product.update({
-          where: { id: item.product_id },
-          data:  { stock: { decrement: item.quantity } },
-        })
-      )
+      updated.items.map((item) => {
+        if (item.variant_id) {
+          return prisma.productVariant.update({
+            where: { id: item.variant_id },
+            data:  { stock: { decrement: item.quantity } },
+          })
+        }
+        return Promise.resolve() // Fallback if variant_id is somehow missing
+      })
     )
 
     // 2. Clear the user's cart NOW that payment is successful
@@ -78,6 +81,31 @@ export async function POST(req: Request) {
       })
     }
 
+    // ==========================================
+    // 🤖 FULL AUTOMATION: SHIPROCKET INJECTION
+    // ==========================================
+    try {
+      const shiprocketData = await createShiprocketOrder(updated.id);
+      const awbData = await generateAWB(shiprocketData.shipment_id);
+
+      updated = await prisma.order.update({
+        where: { id: updated.id },
+        data: {
+          shiprocket_order_id: String(shiprocketData.order_id),
+          shiprocket_shipment_id: String(shiprocketData.shipment_id),
+          // Need to add awb column to schema if it doesn't exist, using tracking_url as fallback
+          tracking_url: awbData.response?.data?.awb_code ? `https://shiprocket.co/tracking/${awbData.response.data.awb_code}` : null,
+          status: 'SHIPPED', 
+        },
+        include: { items: true }
+      });
+
+      console.log(`✅ Auto-Shipment Success for Order: ${updated.order_number}`);
+    } catch (shipError) {
+      console.error("❌ Auto-Shipment Failed, falling back to manual:", shipError);
+    }
+    // ==========================================
+
     // 3. Send Email using the 'updated' object
     if (user.email) {
       sendOrderConfirmationMail({
@@ -85,8 +113,8 @@ export async function POST(req: Request) {
         customerName:    user.name || 'Customer',
         orderNumber:     updated.order_number,
         items:           updated.items,
-        totalAmount:     updated.total_amount,
-        shippingAddress: updated.shipping_address, // Extracted from 'updated'
+        totalAmount:     Number(updated.total_amount), // Explicitly cast Decimal
+        shippingAddress: updated.shipping_address, 
       }).catch(console.error)
     }
 

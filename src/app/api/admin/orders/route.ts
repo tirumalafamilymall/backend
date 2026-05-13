@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/admin/orders — get all orders (admin view)
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
@@ -13,7 +12,6 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
-    // Dynamically build the where clause based on provided filters
     const where: any = {
       ...(status && { status: status as any }),
       ...(payment_status && { payment_status: payment_status as any }),
@@ -26,7 +24,7 @@ export async function GET(req: Request) {
       })
     }
 
-    const [orders, total] = await Promise.all([
+    const [rawOrders, total] = await Promise.all([
       prisma.order.findMany({
         where,
         include: { items: true, user: true },
@@ -36,6 +34,17 @@ export async function GET(req: Request) {
       }),
       prisma.order.count({ where }),
     ])
+
+    // SAFELY CONVERT DECIMALS TO NUMBERS FOR THE FRONTEND
+    const orders = rawOrders.map(order => ({
+      ...order,
+      total_amount: Number(order.total_amount),
+      shipping_amount: Number(order.shipping_amount),
+      items: order.items.map(item => ({
+        ...item,
+        price: Number(item.price)
+      }))
+    }))
 
     return NextResponse.json({
       success: true,

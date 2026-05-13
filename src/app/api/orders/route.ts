@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
-import { generateOrderNumber, calculateCartTotal } from '@/lib/order'
+import { generateOrderNumber } from '@/lib/order'
 
 export async function GET(req: Request) {
   try {
@@ -40,28 +40,33 @@ export async function POST(req: Request) {
       )
     }
 
+    // CHANGED: Include the variant and its parent product
     const cart = await prisma.cart.findUnique({
       where: { user_id: user.id },
-      include: { items: { include: { product: true } } },
+      include: { items: { include: { variant: { include: { product: true } } } } },
     })
 
     if (!cart || cart.items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
     }
 
+    let cart_subtotal = 0;
+
+    // CHANGED: Verify stock against the physical variant
     for (const item of cart.items) {
-      if (item.product.stock < item.quantity) {
+      if (item.variant.stock < item.quantity) {
         return NextResponse.json(
-          { error: `Insufficient stock for: ${item.product.name}`, product_id: item.product_id },
+          { error: `Insufficient stock for: ${item.variant.product.name} (${item.variant.size || 'Base'})`, variant_id: item.variant_id },
           { status: 400 }
         )
       }
+      // Safely calculate the total using the variant's Decimal base_price
+      cart_subtotal += Number(item.variant.base_price) * item.quantity;
     }
 
-    const cart_subtotal = await calculateCartTotal(cart.id)
     const total_amount = cart_subtotal + Number(shipping_amount)
 
-// Replace the entire prisma.$transaction block with this:
+    // CHANGED: Snapshot the exact variant details into the OrderItem
     const order = await prisma.order.create({
       data: {
         order_number:    generateOrderNumber(),
@@ -74,22 +79,22 @@ export async function POST(req: Request) {
         payment_status:  'UNPAID',
         items: {
           create: cart.items.map((item) => ({
-            product_id:   item.product_id,
-            product_code: item.product.product_code,
-            name:         item.product.name,
-            category:     item.product.category,
-            brand:        item.product.brand || null,
-            color:        item.product.color || null,
-            size:         item.product.size  || null,
-            price:        item.product.base_price,
+            product_id:   item.variant.product.id,
+            variant_id:   item.variant.id,
+            product_code: item.variant.product.product_code,
+            name:         item.variant.product.name,
+            category:     item.variant.product.category,
+            brand:        item.variant.product.brand || null,
+            color:        item.variant.color || null,
+            size:         item.variant.size  || null,
+            price:        Number(item.variant.base_price),
             quantity:     item.quantity,
-            image:        item.product.images?.[0] || null,
+            image:        item.variant.product.images?.[0] || null,
           })),
         },
       },
       include: { items: true },
     })
-
 
     return NextResponse.json({ success: true, order }, { status: 201 })
   } catch (error) {

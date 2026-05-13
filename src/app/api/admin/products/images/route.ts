@@ -10,7 +10,7 @@ export async function POST(req: Request) {
 
     // ── ACTION 1: Generate URLs (INIT) ──────────────────────────
     if (body.action === 'INIT') {
-      const { images } = body // { productCode, fileName, mimeType }[]
+      const { images } = body 
       
       const productCodes = images.map((img: any) => img.productCode)
       const products = await prisma.product.findMany({
@@ -44,17 +44,17 @@ export async function POST(req: Request) {
 
     // ── ACTION 2: Save to Database (COMMIT) ─────────────────────
     if (body.action === 'COMMIT') {
-      const { updates } = body // { productId, publicUrl }[]
+      const { updates } = body 
       
       let successCount = 0
       const failed = []
 
-      // Execute sequentially to avoid connection pooling issues on large batches
       for (const update of updates) {
         try {
           await prisma.product.update({
             where: { id: update.productId },
-            data: { images: [update.publicUrl] }
+            // CHANGED: Using 'push' appends the image instead of overwriting!
+            data: { images: { push: update.publicUrl } } 
           })
           successCount++
         } catch (err: any) {

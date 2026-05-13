@@ -6,7 +6,11 @@ export async function getOrCreateCart(userId: string) {
     include: {
       items: {
         include: {
-          product: true,
+          variant: { // CHANGED: Must include variant
+            include: {
+              product: true, // And the product blueprint
+            },
+          },
         },
       },
     },
@@ -18,7 +22,11 @@ export async function getOrCreateCart(userId: string) {
       include: {
         items: {
           include: {
-            product: true,
+            variant: { 
+              include: {
+                product: true,
+              },
+            },
           },
         },
       },

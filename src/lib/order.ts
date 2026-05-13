@@ -9,10 +9,12 @@ export function generateOrderNumber(): string {
 export async function calculateCartTotal(cartId: string): Promise<number> {
   const items = await prisma.cartItem.findMany({
     where: { cart_id: cartId },
-    include: { product: true },
+    include: { variant: true }, // CHANGED: Include variant to get price
   })
 
   return items.reduce((total, item) => {
-    return total + item.product.base_price * item.quantity
+    // CHANGED: Use variant price and cast Decimal to Number
+    const itemPrice = item.variant ? Number(item.variant.base_price) : 0
+    return total + (itemPrice * item.quantity)
   }, 0)
 }

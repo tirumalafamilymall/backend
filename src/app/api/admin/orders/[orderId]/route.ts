@@ -2,14 +2,13 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendShippingMail } from '@/lib/mailer'
 
-// GET /api/admin/orders/:orderId
 export async function GET(
   req: Request,
   _context: { params: Promise<{ orderId: string }> }
 ) {
   const params = await _context.params
   try {
-    const order = await prisma.order.findUnique({
+    const rawOrder = await prisma.order.findUnique({
       where: { id: params.orderId },
       include: {
         items: true,
@@ -17,8 +16,19 @@ export async function GET(
       },
     })
 
-    if (!order) {
+    if (!rawOrder) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    // SAFELY CONVERT DECIMALS TO NUMBERS
+    const order = {
+      ...rawOrder,
+      total_amount: Number(rawOrder.total_amount),
+      shipping_amount: Number(rawOrder.shipping_amount),
+      items: rawOrder.items.map(item => ({
+        ...item,
+        price: Number(item.price)
+      }))
     }
 
     return NextResponse.json({ success: true, order })
@@ -41,7 +51,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    // Fetch existing order with user before updating
     const existing = await prisma.order.findUnique({
       where: { id: params.orderId },
       include: { user: true },
@@ -51,17 +60,23 @@ export async function PATCH(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    const order = await prisma.order.update({
+    const rawOrder = await prisma.order.update({
       where: { id: params.orderId },
       data: {
-        ...(status             && { status }),
-        ...(tracking_url       && { tracking_url }),
+        ...(status              && { status }),
+        ...(tracking_url        && { tracking_url }),
         ...(shiprocket_order_id && { shiprocket_order_id }),
       },
       include: { items: true },
     })
 
-    // Send shipping email when status changes to SHIPPED
+    const order = {
+      ...rawOrder,
+      total_amount: Number(rawOrder.total_amount),
+      shipping_amount: Number(rawOrder.shipping_amount),
+      items: rawOrder.items.map(item => ({ ...item, price: Number(item.price) }))
+    }
+
     if (status === 'SHIPPED' && existing.user?.email) {
       sendShippingMail({
         customerEmail: existing.user.email,

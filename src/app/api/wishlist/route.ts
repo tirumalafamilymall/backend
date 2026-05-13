@@ -12,12 +12,11 @@ async function getOrCreateWishlist(userId: string) {
             select: {
               id:           true,
               name:         true,
-              base_price:   true,
               images:       true,
               category:     true,
-              stock:        true,
               is_active:    true,
               product_code: true,
+              variants:     true, // CHANGED: Must include variants to get price/stock
             },
           },
         },
@@ -31,7 +30,7 @@ async function getOrCreateWishlist(userId: string) {
       data: { user_id: userId },
       include: {
         items: {
-          include: { product: true },
+          include: { product: { include: { variants: true } } },
         },
       },
     })
@@ -40,7 +39,6 @@ async function getOrCreateWishlist(userId: string) {
   return wishlist
 }
 
-// GET /api/wishlist — get user's wishlist
 export async function GET(req: Request) {
   try {
     const user = await getUserFromRequest(req)
@@ -54,28 +52,22 @@ export async function GET(req: Request) {
   }
 }
 
-// POST /api/wishlist — add product to wishlist
-// Body: { product_id }
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { product_id } = await req.json()
-    if (!product_id) {
-      return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
-    }
+    if (!product_id) return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
 
     const product = await prisma.product.findUnique({ where: { id: product_id } })
-    if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
-    }
+    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
     const wishlist = await getOrCreateWishlist(user.id)
 
     const item = await prisma.wishlistItem.create({
       data: { wishlist_id: wishlist.id, product_id },
-      include: { product: true },
+      include: { product: { include: { variants: true } } },
     })
 
     return NextResponse.json({ success: true, item }, { status: 201 })
@@ -88,25 +80,19 @@ export async function POST(req: Request) {
   }
 }
 
-// DELETE /api/wishlist — remove product from wishlist
-// Body: { product_id }
 export async function DELETE(req: Request) {
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { product_id } = await req.json()
-    if (!product_id) {
-      return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
-    }
+    if (!product_id) return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
 
     const wishlist = await prisma.wishlist.findUnique({
       where: { user_id: user.id },
     })
 
-    if (!wishlist) {
-      return NextResponse.json({ error: 'Wishlist not found' }, { status: 404 })
-    }
+    if (!wishlist) return NextResponse.json({ error: 'Wishlist not found' }, { status: 404 })
 
     await prisma.wishlistItem.deleteMany({
       where: { wishlist_id: wishlist.id, product_id },

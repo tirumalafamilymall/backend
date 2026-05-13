@@ -1,37 +1,49 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/products/search?q=kurti
-// Lightweight — returns minimal fields for search dropdown UI
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get('q')?.trim()
 
-    if (!q || q.length < 2) {
-      return NextResponse.json({ success: true, products: [] })
-    }
+    if (!q || q.length < 2) return NextResponse.json({ success: true, products: [] })
 
-    const products = await prisma.product.findMany({
+    const rawProducts = await prisma.product.findMany({
       where: {
         is_active: true,
+        is_deleted: false,
+        sales_channel: 'MAIN_STORE',
         OR: [
-          { name:     { contains: q, mode: 'insensitive' } },
-          { brand:    { contains: q, mode: 'insensitive' } },
-          { category: { contains: q, mode: 'insensitive' } },
-          { barcode:  { contains: q, mode: 'insensitive' } },
+          { name:         { contains: q, mode: 'insensitive' } },
+          { brand:        { contains: q, mode: 'insensitive' } },
+          { category:     { contains: q, mode: 'insensitive' } },
           { product_code: { contains: q, mode: 'insensitive' } },
         ],
       },
-      take: 10, // search dropdown max
+      take: 10, 
       select: {
         id:         true,
+        slug:       true,
         name:       true,
         category:   true,
-        base_price: true,
         images:     true,
-        stock:      true,
+        variants:   true // Get variants to calculate price/stock
       },
+    })
+
+    const products = rawProducts.map(p => {
+      const stock = p.variants.reduce((sum, v) => sum + v.stock, 0)
+      const prices = p.variants.map(v => Number(v.base_price))
+      const basePrice = prices.length > 0 ? Math.min(...prices) : 0
+
+      return {
+        id: p.slug || p.id,
+        name: p.name,
+        category: p.category,
+        base_price: basePrice,
+        images: p.images,
+        stock: stock,
+      }
     })
 
     return NextResponse.json({ success: true, products })

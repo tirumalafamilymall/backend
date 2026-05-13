@@ -1,17 +1,41 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/admin/insta-live — list all (including inactive)
+// GET /api/admin/insta-live — list all
 export async function GET() {
   try {
-    const posts = await prisma.instaLive.findMany({
+    const rawPosts = await prisma.instaLive.findMany({
       orderBy: { created_at: 'desc' },
       include: {
         products: {
-          include: { product: true },
+          include: {
+            product: { 
+              include: { variants: true } // 🔥 CRITICAL: Must include variants
+            },
+          },
         },
       },
     })
+
+    // Map through posts to calculate display price and stock from variants
+    const posts = rawPosts.map(post => ({
+      ...post,
+      products: post.products.map(link => {
+        const p = link.product
+        const prices = p.variants.map(v => Number(v.base_price))
+        const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
+        
+        return {
+          ...link,
+          product: {
+            ...p,
+            // Flatten data for the Admin UI to read easily
+            base_price: prices.length > 0 ? Math.min(...prices) : 0,
+            stock: totalStock,
+          }
+        }
+      })
+    }))
 
     return NextResponse.json({ success: true, posts })
   } catch (error) {
@@ -21,7 +45,6 @@ export async function GET() {
 }
 
 // POST /api/admin/insta-live — create new post
-// Body: { title?, instagram_url, thumbnail, product_ids? }
 export async function POST(req: Request) {
   try {
     const { title, instagram_url, thumbnail, product_ids } = await req.json()
@@ -46,7 +69,9 @@ export async function POST(req: Request) {
       },
       include: {
         products: {
-          include: { product: true },
+          include: {
+            product: { include: { variants: true } }, // 🔥 CRITICAL: Must include variants
+          },
         },
       },
     })
