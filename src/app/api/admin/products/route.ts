@@ -86,7 +86,7 @@ export async function POST(req: Request) {
     const {
       product_code: custom_code,
       name,
-      department, // NEW REQUIRED FIELD
+      department,
       category,
       subcategory,
       brand,
@@ -119,7 +119,36 @@ export async function POST(req: Request) {
 
     const fallbackSku = `${final_product_code}-${size || 'BASE'}-${color || 'BASE'}`.replace(/\s+/g, '').toUpperCase()
 
-    // Create Parent AND Child simultaneously
+    // 🔥 SMART UPSERT LOGIC STARTS HERE 🔥
+    
+    // 1. Check if a product with this exact code already exists
+    const existingProduct = await prisma.product.findUnique({
+      where: { product_code: final_product_code }
+    })
+
+    if (existingProduct) {
+      // 2. PRODUCT EXISTS: Append the new size/color to the existing parent
+      const updatedProduct = await prisma.product.update({
+        where: { id: existingProduct.id },
+        data: {
+          variants: {
+            create: {
+              base_price: parseFloat(base_price),
+              stock:      parseInt(stock) || 0,
+              color:      color   || null,
+              size:       size    || null,
+              barcode:    barcode || null,
+              sku:        fallbackSku
+            }
+          }
+        },
+        include: { variants: true }
+      })
+
+      return NextResponse.json({ success: true, product: updatedProduct }, { status: 201 })
+    }
+
+    // 3. PRODUCT DOES NOT EXIST: Create brand new Parent AND Child simultaneously
     const product = await prisma.product.create({
       data: {
         product_code: final_product_code,
@@ -144,9 +173,18 @@ export async function POST(req: Request) {
       include: { variants: true }
     })
 
-    return NextResponse.json({ success: true, product })
-  } catch (error) {
+    return NextResponse.json({ success: true, product }, { status: 201 })
+
+  } catch (error: any) {
     console.error(error)
+    
+    // Safe failure if they try to upload the exact same size & color twice
+    if (error.code === 'P2002') {
+      return NextResponse.json({ 
+        error: 'A variant with this Size/Color already exists for this product code.' 
+      }, { status: 409 })
+    }
+
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
 }
