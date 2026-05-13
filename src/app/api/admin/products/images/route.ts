@@ -11,28 +11,50 @@ export async function POST(req: Request) {
     // ── ACTION 1: Generate URLs (INIT) ──────────────────────────
     if (body.action === 'INIT') {
       const { images } = body 
-      
-      const productCodes = images.map((img: any) => img.productCode)
-      const products = await prisma.product.findMany({
-        where: { product_code: { in: productCodes } },
-        select: { id: true, product_code: true },
-      })
-
-      const productMap = new Map(products.map(p => [p.product_code, p.id]))
       const matched = []
       const unmatched = []
 
       for (const img of images) {
-        const productId = productMap.get(img.productCode)
-        if (!productId) {
-          unmatched.push({ product_code: img.productCode, status: 'unmatched', reason: 'No product found' })
+        // 1. Split filename by _ or - (e.g. "TF2_GREEN" -> ["TF2", "GREEN"])
+        // We use the raw productCode field which usually contains the filename from the ZIP
+        const parts = img.productCode.toUpperCase().split(/[_-]/)
+        const codePart = parts[0]?.trim()
+        const colorPart = parts[1]?.trim()
+
+        // 2. Fetch the product using the first part of the name
+        const product = await prisma.product.findUnique({
+          where: { product_code: codePart },
+          include: { variants: true }
+        })
+
+        if (!product) {
+          unmatched.push({ product_code: img.productCode, status: 'unmatched', reason: 'No product code matches' })
           continue
         }
 
+        // 3. Determine if this image is for a specific color (Variant) or the general product (Parent)
+        let targetType = 'PARENT'
+        let targetId = product.id
+        
+        if (colorPart) {
+          // Check if any variant's color contains our keyword (e.g. "GREEN" in "PRERO - GREEN")
+          const variantMatch = product.variants.find(v => 
+            v.color && v.color.toUpperCase().includes(colorPart)
+          )
+          
+          if (variantMatch) {
+            targetType = 'VARIANT'
+            targetId = variantMatch.id
+          }
+        }
+
+        // 4. Generate the Cloud URL
         const { uploadUrl, publicUrl } = await generatePresignedUrl(img.fileName, img.mimeType)
+        
         matched.push({
           productCode: img.productCode,
-          productId,
+          targetType, // 🔥 Stores whether it's for Product or Variant
+          targetId,   // 🔥 Stores the specific ID to update later
           fileName: img.fileName,
           uploadUrl,
           publicUrl
@@ -45,20 +67,27 @@ export async function POST(req: Request) {
     // ── ACTION 2: Save to Database (COMMIT) ─────────────────────
     if (body.action === 'COMMIT') {
       const { updates } = body 
-      
       let successCount = 0
       const failed = []
 
       for (const update of updates) {
         try {
-          await prisma.product.update({
-            where: { id: update.productId },
-            // CHANGED: Using 'push' appends the image instead of overwriting!
-            data: { images: { push: update.publicUrl } } 
-          })
+          if (update.targetType === 'VARIANT') {
+            // 🔥 Save to the specific Color variant's image field
+            await prisma.productVariant.update({
+              where: { id: update.targetId },
+              data: { image: update.publicUrl }
+            })
+          } else {
+            // 👗 Add to the general product's image gallery
+            await prisma.product.update({
+              where: { id: update.targetId },
+              data: { images: { push: update.publicUrl } }
+            })
+          }
           successCount++
         } catch (err: any) {
-          failed.push({ productId: update.productId, reason: err.message })
+          failed.push({ targetId: update.targetId, reason: err.message })
         }
       }
 
