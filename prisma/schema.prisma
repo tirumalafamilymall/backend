@@ -70,10 +70,11 @@ model Product {
 model ProductVariant {
   id          String      @id @default(uuid())
   product_id  String
-  sku         String      @unique // ADDED FOR INVENTORY/BARCODES
+  sku         String      @unique 
   size        String?
   color       String?
-  base_price  Decimal     @db.Decimal(10,2) // DECIMAL FOR EXACT CURRENCY
+  image       String?     
+  base_price  Decimal     @db.Decimal(10,2) 
   stock       Int         @default(0)
   barcode     String?
   created_at  DateTime    @default(now())

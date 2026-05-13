@@ -46,19 +46,39 @@ export async function GET(req: Request) {
       prisma.product.count({ where }),
     ])
 
-    // Flatten the data for the current UI table
-    const products = rawProducts.map(p => {
-      const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
-      const basePrice = p.variants.length > 0 ? Number(p.variants[0].base_price) : 0
-      
-      return {
-        ...p,
-        stock: totalStock,
-        base_price: basePrice,
-        // Grab the first variant's details for the simple edit form
-        color: p.variants[0]?.color || '',
-        size: p.variants[0]?.size || '',
-        barcode: p.variants[0]?.barcode || ''
+    // 🔥 FIX: Flatten data to create ONE ROW PER VARIANT for the Admin Table
+    const products: any[] = []
+    
+    rawProducts.forEach(p => {
+      if (!p.variants || p.variants.length === 0) {
+        // Fallback for products with no variants
+        products.push({
+          ...p,
+          stock: 0,
+          base_price: 0,
+          color: '',
+          size: '',
+          barcode: '',
+          variant_id: null,
+          sku: p.product_code
+        })
+      } else {
+        // Create a distinct row for every size/color combination
+        p.variants.forEach(v => {
+          products.push({
+            ...p, 
+            id: p.id,
+            variant_id: v.id,
+            stock: v.stock,
+            base_price: Number(v.base_price),
+            color: v.color || '',
+            size: v.size || '',
+            barcode: v.barcode || '',
+            sku: v.sku || '',
+            // Use the specific variant image, or fallback to the parent's first image
+            image: v.image || (p.images && p.images.length > 0 ? p.images[0] : null)
+          })
+        })
       }
     })
 
@@ -119,8 +139,6 @@ export async function POST(req: Request) {
 
     const fallbackSku = `${final_product_code}-${size || 'BASE'}-${color || 'BASE'}`.replace(/\s+/g, '').toUpperCase()
 
-    // 🔥 SMART UPSERT LOGIC STARTS HERE 🔥
-    
     // 1. Check if a product with this exact code already exists
     const existingProduct = await prisma.product.findUnique({
       where: { product_code: final_product_code }
@@ -137,6 +155,7 @@ export async function POST(req: Request) {
               stock:      parseInt(stock) || 0,
               color:      color   || null,
               size:       size    || null,
+              image:      images?.[0] || null, // 🔥 Save specific image to variant
               barcode:    barcode || null,
               sku:        fallbackSku
             }
@@ -165,6 +184,7 @@ export async function POST(req: Request) {
             stock:      parseInt(stock) || 0,
             color:      color   || null,
             size:       size    || null,
+            image:      images?.[0] || null, // 🔥 Save specific image to variant
             barcode:    barcode || null,
             sku:        fallbackSku
           }
