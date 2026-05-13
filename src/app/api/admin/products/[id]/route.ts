@@ -34,24 +34,13 @@ export async function PATCH(
   const params = await _context.params
   try {
     const body = await req.json()
-
-    const product = await prisma.product.findUnique({ 
-      where: { id: params.id },
-      include: { variants: true } 
-    })
-    
-    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
-
-    const {
+    const { 
+      variant_id, // 🔥 IMPORTANT: Frontend must send which specific variant is being edited
       name, department, category, subcategory, brand, images, is_active,
-      base_price, color, size, stock, barcode
+      base_price, color, size, stock, barcode, image // variant-specific image
     } = body
 
-    if (stock !== undefined && stock < 0) {
-      return NextResponse.json({ error: 'Stock cannot be negative' }, { status: 400 })
-    }
-
-    // 1. Update the Parent Blueprint
+    // 1. Update the Parent (Common details for all variants)
     const updatedProduct = await prisma.product.update({
       where: { id: params.id },
       data: {
@@ -65,24 +54,26 @@ export async function PATCH(
       },
     })
 
-    // 2. Update the First Variant (Bridge for the simple UI)
-    if (product.variants.length > 0) {
-      const firstVariant = product.variants[0]
+    // 2. Update ONLY the specific variant selected in the Admin table
+    if (variant_id) {
       await prisma.productVariant.update({
-        where: { id: firstVariant.id },
+        where: { id: variant_id },
         data: {
           ...(base_price !== undefined && { base_price: parseFloat(base_price) }),
           ...(color      !== undefined && { color }),
           ...(size       !== undefined && { size }),
           ...(stock      !== undefined && { stock: parseInt(stock) }),
           ...(barcode    !== undefined && { barcode }),
+          ...(image      !== undefined && { image }), // Variant-specific image
         }
       })
     }
 
     return NextResponse.json({ success: true, product: updatedProduct })
-  } catch (error) {
-    console.error(error)
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return NextResponse.json({ error: 'Another variant already exists with this Size and Color.' }, { status: 409 })
+    }
     return NextResponse.json({ error: 'Failed to update product' }, { status: 500 })
   }
 }
