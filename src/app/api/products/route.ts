@@ -81,6 +81,7 @@ export async function GET(req: Request) {
         images:       p.images,
         base_price:   basePrice,
         stock:        totalStock,
+        variants:     p.variants,
       }
     })
 
