@@ -20,7 +20,6 @@ export async function GET(req: Request) {
     const page        = parseInt(searchParams.get('page') || '1')
     const limit       = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
 
-    // Build the Variant Filter (Since price, stock, size, color live here now)
     const variantFilter: any = {}
     if (color) variantFilter.color = { equals: color, mode: 'insensitive' }
     if (size) variantFilter.size = { equals: size, mode: 'insensitive' }
@@ -35,7 +34,7 @@ export async function GET(req: Request) {
     const where: any = {
       is_active: true,
       is_deleted: false,
-      sales_channel: 'MAIN_STORE', // <-- HIDES INSTA LIVE PRODUCTS
+      sales_channel: 'MAIN_STORE', 
       ...(department  && { department: department.toUpperCase() as Department }),
       ...(category    && { category: { equals: category, mode: 'insensitive' } }),
       ...(subcategory && { subcategory: { equals: subcategory, mode: 'insensitive' } }),
@@ -47,7 +46,6 @@ export async function GET(req: Request) {
           { category: { contains: search, mode: 'insensitive' } },
         ],
       }),
-      // Only return products that have AT LEAST ONE variant matching the filters
       ...(Object.keys(variantFilter).length > 0 && {
         variants: { some: variantFilter }
       })
@@ -56,18 +54,16 @@ export async function GET(req: Request) {
     const [rawProducts, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy: { created_at: 'desc' }, // Sorting by price requires an aggregate workaround, sticking to newest for now
+        orderBy: { created_at: 'desc' }, 
         skip: (page - 1) * limit,
         take: limit,
-        include: { variants: true } // Fetch variants to calculate display price/stock
+        include: { variants: true } 
       }),
       prisma.product.count({ where }),
     ])
 
-    // Format for the frontend UI (aggregate variant data)
     let products = rawProducts.map(p => {
       const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
-      // Find the lowest price among variants to show "Starts at ₹X"
       const prices = p.variants.map(v => Number(v.base_price))
       const basePrice = prices.length > 0 ? Math.min(...prices) : 0
 
@@ -77,6 +73,7 @@ export async function GET(req: Request) {
         product_code: p.product_code,
         name:         p.name,
         category:     p.category,
+        subcategory:  p.subcategory, // 🔥 ADDED THIS SO FRONTEND CAN SEE IT
         brand:        p.brand,
         images:       p.images,
         base_price:   basePrice,
@@ -85,7 +82,6 @@ export async function GET(req: Request) {
       }
     })
 
-    // Custom sorting since price is on child variants
     if (sort === 'price_asc')  products.sort((a, b) => a.base_price - b.base_price)
     if (sort === 'price_desc') products.sort((a, b) => b.base_price - a.base_price)
 
