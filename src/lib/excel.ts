@@ -37,8 +37,14 @@ const COLUMN_MAP: Record<string, string> = {
 
   'size':         'size',
 
-  'sku':          'sku', // Specific Variant SKU
+  'sku':          'sku', 
   'barcode':      'barcode',
+
+  // 🔥 FIX 1: Teach the parser how to read image columns
+  'image':        'image',
+  'image_url':    'image',
+  'img':          'image',
+  'photo':        'image',
 }
 
 function normalizeKey(key: string): string {
@@ -118,6 +124,9 @@ export function parseExcelBuffer(buffer: Buffer): {
       size:         normalized.size    ? String(normalized.size).trim()    : null,
       sku:          normalized.sku     ? String(normalized.sku).trim()     : null,
       barcode:      normalized.barcode ? String(normalized.barcode).trim() : null,
+      
+      // 🔥 FIX 2: Push the image URL into the output array
+      image:        normalized.image   ? String(normalized.image).trim()   : null,
     })
   })
 

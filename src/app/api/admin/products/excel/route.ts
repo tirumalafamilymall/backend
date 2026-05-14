@@ -61,6 +61,8 @@ export async function POST(req: Request) {
         stock:      item.stock,
         sku:        item.sku || fallbackSku,
         barcode:    item.barcode,
+        // 🔥 FIX 3: Push the image URL into the variant object
+        image:      item.image || null,
       })
     }
 
@@ -103,9 +105,11 @@ export async function POST(req: Request) {
               where: { id: existingVariant.id },
               data: {
                 base_price: v.base_price,
-                stock:      v.stock, // In real life, you might want { increment: v.stock }, but overwrite is safer for Excel syncs
+                stock:      v.stock, 
                 sku:        v.sku,
-                barcode:    v.barcode
+                barcode:    v.barcode,
+                // 🔥 FIX 4: Save image URL on update
+                image:      v.image || null, 
               }
             })
           } else {
@@ -117,7 +121,9 @@ export async function POST(req: Request) {
                 base_price: v.base_price,
                 stock:      v.stock,
                 sku:        v.sku,
-                barcode:    v.barcode
+                barcode:    v.barcode,
+                // 🔥 FIX 5: Save image URL on create
+                image:      v.image || null, 
               }
             })
           }
