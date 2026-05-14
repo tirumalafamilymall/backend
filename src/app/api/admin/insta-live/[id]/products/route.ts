@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// This file ONLY handles POST requests to /api/admin/insta-live/[id]/products
 export async function POST(
   req: Request,
   _context: { params: Promise<{ id: string }> }
@@ -13,7 +14,7 @@ export async function POST(
 
     const product = await prisma.product.findUnique({ 
       where: { id: product_id },
-      include: { variants: true } // 🔥 Fetch variants to check stats
+      include: { variants: true } 
     })
     
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
@@ -21,11 +22,10 @@ export async function POST(
     const rawLink = await prisma.instaLiveProduct.create({
       data: { insta_live_id: params.id, product_id },
       include: { 
-        product: { include: { variants: true } } // 🔥 Deep include
+        product: { include: { variants: true } }
       },
     })
 
-    // Aggregating for the UI response
     const prices = rawLink.product.variants.map(v => Number(v.base_price))
     const link = {
       ...rawLink,
@@ -40,20 +40,5 @@ export async function POST(
   } catch (error: any) {
     if (error.code === 'P2002') return NextResponse.json({ error: 'Product already linked' }, { status: 409 })
     return NextResponse.json({ error: 'Failed to link product' }, { status: 500 })
-  }
-}
-
-export async function DELETE(
-  req: Request,
-  _context: { params: Promise<{ id: string, productId: string }> }
-) {
-  const params = await _context.params
-  try {
-    await prisma.instaLiveProduct.deleteMany({
-      where: { insta_live_id: params.id, product_id: params.productId },
-    })
-    return NextResponse.json({ success: true, message: 'Product unlinked' })
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to unlink product' }, { status: 500 })
   }
 }
