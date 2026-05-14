@@ -12,15 +12,22 @@ export async function POST(
 
     if (!product_id) return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
 
-    const product = await prisma.product.findUnique({ 
-      where: { id: product_id },
+    // 🔥 FIX: Check both the 'id' and 'slug' columns
+    const product = await prisma.product.findFirst({ 
+      where: { 
+        OR: [
+          { id: product_id },
+          { slug: product_id }
+        ]
+      },
       include: { variants: true } 
     })
     
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
     const rawLink = await prisma.instaLiveProduct.create({
-      data: { insta_live_id: params.id, product_id },
+      // 🔥 FIX: Ensure we save the actual database ID, even if the frontend sent the slug
+      data: { insta_live_id: params.id, product_id: product.id },
       include: { 
         product: { include: { variants: true } }
       },
