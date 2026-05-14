@@ -11,8 +11,23 @@ export async function GET(
     const rawOrder = await prisma.order.findUnique({
       where: { id: params.orderId },
       include: {
-        items: true,
-        user:  { select: { name: true, email: true } },
+        user: { select: { name: true, email: true } },
+        items: {
+          include: {
+            variant: {
+              select: {
+                image:   true,
+                size:    true,
+                color:   true,
+                product: {
+                  select: {
+                    images: true,
+                  }
+                }
+              }
+            }
+          }
+        },
       },
     })
 
@@ -20,14 +35,18 @@ export async function GET(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    // SAFELY CONVERT DECIMALS TO NUMBERS
     const order = {
       ...rawOrder,
-      total_amount: Number(rawOrder.total_amount),
+      total_amount:    Number(rawOrder.total_amount),
       shipping_amount: Number(rawOrder.shipping_amount),
       items: rawOrder.items.map(item => ({
         ...item,
-        price: Number(item.price)
+        price: Number(item.price),
+        // ✅ FIX: Resolve image from variant first, then parent product images
+        image: item.variant?.image || item.variant?.product?.images?.[0] || null,
+        // ✅ Also pull size/color from variant if not stored on item directly
+        size:  item.size  || item.variant?.size  || null,
+        color: item.color || item.variant?.color || null,
       }))
     }
 
@@ -67,14 +86,38 @@ export async function PATCH(
         ...(tracking_url        && { tracking_url }),
         ...(shiprocket_order_id && { shiprocket_order_id }),
       },
-      include: { items: true },
+      include: {
+        // ✅ FIX: Same join in PATCH so the returned order also has images
+        items: {
+          include: {
+            variant: {
+              select: {
+                image:   true,
+                size:    true,
+                color:   true,
+                product: {
+                  select: {
+                    images: true,
+                  }
+                }
+              }
+            }
+          }
+        },
+      },
     })
 
     const order = {
       ...rawOrder,
-      total_amount: Number(rawOrder.total_amount),
+      total_amount:    Number(rawOrder.total_amount),
       shipping_amount: Number(rawOrder.shipping_amount),
-      items: rawOrder.items.map(item => ({ ...item, price: Number(item.price) }))
+      items: rawOrder.items.map(item => ({
+        ...item,
+        price: Number(item.price),
+        image: item.variant?.image || item.variant?.product?.images?.[0] || null,
+        size:  item.size  || item.variant?.size  || null,
+        color: item.color || item.variant?.color || null,
+      }))
     }
 
     if (status === 'SHIPPED' && existing.user?.email) {

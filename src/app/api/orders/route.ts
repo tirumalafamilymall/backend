@@ -89,7 +89,7 @@ export async function POST(req: Request) {
             size:         item.variant.size  || null,
             price:        Number(item.variant.base_price),
             quantity:     item.quantity,
-            image:        item.variant.product.images?.[0] || null,
+            image: item.variant.image || item.variant.product.images?.[0] || null,
           })),
         },
       },
