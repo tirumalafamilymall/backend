@@ -20,29 +20,34 @@ export async function GET(req: Request) {
           { product_code: { contains: q, mode: 'insensitive' } },
         ],
       },
-      take: 10, 
+      take: 10,
       select: {
         id:         true,
         slug:       true,
         name:       true,
         category:   true,
         images:     true,
-        variants:   true // Get variants to calculate price/stock
+        variants:   true,
       },
     })
 
     const products = rawProducts.map(p => {
-      const stock = p.variants.reduce((sum, v) => sum + v.stock, 0)
-      const prices = p.variants.map(v => Number(v.base_price))
+      const stock    = p.variants.reduce((sum, v) => sum + v.stock, 0)
+      const prices   = p.variants.map(v => Number(v.base_price))
       const basePrice = prices.length > 0 ? Math.min(...prices) : 0
 
+      // ✅ FIX: Excel-uploaded products store images on variants, not the parent.
+      // Check variant images first, then fall back to parent images array.
+      const image = p.variants.find(v => v.image)?.image || p.images?.[0] || null
+
       return {
-        id: p.slug || p.id,
-        name: p.name,
-        category: p.category,
+        id:         p.slug || p.id,
+        name:       p.name,
+        category:   p.category,
         base_price: basePrice,
-        images: p.images,
-        stock: stock,
+        images:     p.images,
+        image,        // ✅ single resolved image for ProductCard to use directly
+        stock,
       }
     })
 
