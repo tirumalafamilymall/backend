@@ -34,17 +34,19 @@ export async function POST(req: Request) {
 
     for (const item of products) {
       const code = item.product_code
-      if (!groupedProducts.has(code)) {
+if (!groupedProducts.has(code)) {
         // First time seeing this code: Set up the Parent Blueprint
         groupedProducts.set(code, {
           parentData: {
-            product_code: code,
-            name:         item.name,
-            department:   item.department as Department,
-            category:     item.category,
-            subcategory:  item.subcategory,
-            brand:        item.brand,
-            slug:         generateSlug(item.name, code),
+            product_code:  code,
+            name:          item.name,
+            department:    item.department as Department,
+            category:      item.category,
+            subcategory:   item.subcategory,
+            brand:         item.brand,
+            slug:          generateSlug(item.name, code),
+            // 🔥 NEW: Check Excel for sales channel, default to MAIN_STORE
+            sales_channel: (item.sales_channel && item.sales_channel.toUpperCase() === 'INSTA_LIVE') ? 'INSTA_LIVE' : 'MAIN_STORE',
           },
           variants: []
         })

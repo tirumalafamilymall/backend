@@ -116,6 +116,7 @@ export async function POST(req: Request) {
       stock,
       barcode,
       images,
+      sales_channel // 🔥 NEW: Extract sales_channel from the request
     } = body
 
     if (!name || !category || !base_price || !department) {
@@ -155,7 +156,7 @@ export async function POST(req: Request) {
               stock:      parseInt(stock) || 0,
               color:      color   || null,
               size:       size    || null,
-              image:      images?.[0] || null, // 🔥 Save specific image to variant
+              image:      images?.[0] || null,
               barcode:    barcode || null,
               sku:        fallbackSku
             }
@@ -170,21 +171,23 @@ export async function POST(req: Request) {
     // 3. PRODUCT DOES NOT EXIST: Create brand new Parent AND Child simultaneously
     const product = await prisma.product.create({
       data: {
-        product_code: final_product_code,
+        product_code:  final_product_code,
         name,
-        department:   department.toUpperCase() as Department,
+        department:    department.toUpperCase() as Department,
         category,
-        subcategory:  subcategory || null,
-        brand:        brand       || null,
-        images:       images      || [],
-        slug:         generateSlug(name, final_product_code), 
+        subcategory:   subcategory || null,
+        brand:         brand       || null,
+        images:        images      || [],
+        slug:          generateSlug(name, final_product_code),
+        // 🔥 NEW: Save the sales channel (Defaults to MAIN_STORE if none provided)
+        sales_channel: sales_channel === 'INSTA_LIVE' ? 'INSTA_LIVE' : 'MAIN_STORE',
         variants: {
           create: {
             base_price: parseFloat(base_price),
             stock:      parseInt(stock) || 0,
             color:      color   || null,
             size:       size    || null,
-            image:      images?.[0] || null, // 🔥 Save specific image to variant
+            image:      images?.[0] || null,
             barcode:    barcode || null,
             sku:        fallbackSku
           }
@@ -197,14 +200,11 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error(error)
-    
-    // Safe failure if they try to upload the exact same size & color twice
     if (error.code === 'P2002') {
       return NextResponse.json({ 
         error: 'A variant with this Size/Color already exists for this product code.' 
       }, { status: 409 })
     }
-
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
 }

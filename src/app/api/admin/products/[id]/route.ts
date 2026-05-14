@@ -35,9 +35,10 @@ export async function PATCH(
   try {
     const body = await req.json()
     const { 
-      variant_id, // 🔥 IMPORTANT: Frontend must send which specific variant is being edited
+      variant_id, 
       name, department, category, subcategory, brand, images, is_active,
-      base_price, color, size, stock, barcode, image // variant-specific image
+      base_price, color, size, stock, barcode, image,
+      sales_channel // 🔥 NEW
     } = body
 
     // 1. Update the Parent (Common details for all variants)
@@ -51,6 +52,7 @@ export async function PATCH(
         ...(brand       !== undefined && { brand }),
         ...(images      !== undefined && { images }),
         ...(is_active   !== undefined && { is_active }),
+        ...(sales_channel !== undefined && { sales_channel }), // 🔥 NEW
       },
     })
 
@@ -64,7 +66,7 @@ export async function PATCH(
           ...(size       !== undefined && { size }),
           ...(stock      !== undefined && { stock: parseInt(stock) }),
           ...(barcode    !== undefined && { barcode }),
-          ...(image      !== undefined && { image }), // Variant-specific image
+          ...(image      !== undefined && { image }), 
         }
       })
     }

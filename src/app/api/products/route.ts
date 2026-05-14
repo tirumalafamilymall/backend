@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Department } from '@prisma/client'
+import { Department, SalesChannel } from '@prisma/client' // 🔥 Added SalesChannel import
 
 export async function GET(req: Request) {
   try {
@@ -19,6 +19,9 @@ export async function GET(req: Request) {
     const sort        = searchParams.get('sort') || 'newest'
     const page        = parseInt(searchParams.get('page') || '1')
     const limit       = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
+    
+    // 🔥 NEW: Allow frontend to request Insta Live products, defaults to MAIN_STORE
+    const sales_channel = searchParams.get('sales_channel') || 'MAIN_STORE'
 
     const variantFilter: any = {}
     if (color) variantFilter.color = { equals: color, mode: 'insensitive' }
@@ -34,7 +37,7 @@ export async function GET(req: Request) {
     const where: any = {
       is_active: true,
       is_deleted: false,
-      sales_channel: 'MAIN_STORE', 
+      sales_channel: sales_channel as SalesChannel, // 🔥 Now dynamic!
       ...(department  && { department: department.toUpperCase() as Department }),
       ...(category    && { category: { equals: category, mode: 'insensitive' } }),
       ...(subcategory && { subcategory: { equals: subcategory, mode: 'insensitive' } }),
@@ -73,7 +76,7 @@ export async function GET(req: Request) {
         product_code: p.product_code,
         name:         p.name,
         category:     p.category,
-        subcategory:  p.subcategory, // 🔥 ADDED THIS SO FRONTEND CAN SEE IT
+        subcategory:  p.subcategory,
         brand:        p.brand,
         images:       p.images,
         base_price:   basePrice,
