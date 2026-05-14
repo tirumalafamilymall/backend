@@ -70,16 +70,20 @@ export async function POST(req: Request) {
 
       for (const update of updates) {
         try {
+          // Safety: Use targetIds if plural exists, otherwise fallback to productId
+          const ids = update.targetIds || (update.productId ? [update.productId] : [])
+          
+          if (ids.length === 0) throw new Error("No IDs provided for update")
+
           if (update.targetType === 'VARIANT') {
-            // 🔥 UPDATE ALL MATCHING SIZES AT ONCE
+            // 🔥 Update all matching variants (S, M, L) at once
             await prisma.productVariant.updateMany({
-              where: { id: { in: update.targetIds } },
+              where: { id: { in: ids } },
               data: { image: update.publicUrl }
             })
           } else {
-            // 👗 UPDATE THE PARENT GALLERY
-            // Note: Parent updates one by one to use the Prisma 'push' feature
-            for (const id of update.targetIds) {
+            // 👗 Update the parent product gallery
+            for (const id of ids) {
               await prisma.product.update({
                 where: { id },
                 data: { images: { push: update.publicUrl } }
@@ -88,7 +92,8 @@ export async function POST(req: Request) {
           }
           successCount++
         } catch (err: any) {
-          failed.push({ targetIds: update.targetIds, reason: err.message })
+          console.error("Commit failed for update:", update, err.message)
+          failed.push({ reason: err.message })
         }
       }
 
