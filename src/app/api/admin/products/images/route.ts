@@ -8,15 +8,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
 
-    // ── ACTION 1: Generate URLs (INIT) ──────────────────────────
+// ── ACTION 1: Generate URLs (INIT) ──────────────────────────
     if (body.action === 'INIT') {
       const { images } = body 
       const matched = []
       const unmatched = []
 
       for (const img of images) {
-        // 1. Split filename (e.g. "TF3_HAXA_DUSKY_GREEN" -> ["TF3", "HAXA", ...])
-        const parts = img.productCode.toUpperCase().split(/[_-]/)
+        const parts = img.productCode.toUpperCase().split('_')
         const codePart = parts[0]?.trim()
         const colorPart = parts[1]?.trim()
 
@@ -32,11 +31,9 @@ export async function POST(req: Request) {
         }
 
         let targetType = 'PARENT'
-        let targetIds = [product.id] // We use an array to handle multiple sizes
+        let targetIds = [product.id] 
         
         if (colorPart) {
-          // 🔥 SMART MATCH: Find ALL variants that contain this color keyword
-          // This ensures Size S and Size M both get the same image
           const matchingVariants = product.variants.filter(v => 
             v.color && v.color.toUpperCase().includes(colorPart)
           )
@@ -52,7 +49,7 @@ export async function POST(req: Request) {
         matched.push({
           productCode: img.productCode,
           targetType, 
-          targetIds, // 🔥 Plural: stores all variant IDs (S, M, L)
+          targetIds, 
           fileName: img.fileName,
           uploadUrl,
           publicUrl

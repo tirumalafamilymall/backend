@@ -17,11 +17,13 @@ export async function GET(req: Request) {
     const brand     = searchParams.get('brand')
     const is_active = searchParams.get('is_active')
     const search    = searchParams.get('search')
+    const sales_channel = searchParams.get('sales_channel') // 🔥 NEW: Grab the sales channel
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
 
     const where: any = {
       is_deleted: false,
+      ...(sales_channel && { sales_channel }),
       ...(category  && { category: { contains: category, mode: 'insensitive' } }),
       ...(brand     && { brand:    { contains: brand,    mode: 'insensitive' } }),
       ...(is_active === 'true' && { is_active: true }),
