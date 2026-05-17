@@ -226,3 +226,9 @@ enum Role {
   USER
   ADMIN
 }
+
+model Storefront {
+  id        String   @id @default("home_page")
+  content   Json
+  updatedAt DateTime @updatedAt
+}

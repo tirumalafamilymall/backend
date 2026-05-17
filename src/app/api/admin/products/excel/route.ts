@@ -59,10 +59,9 @@ if (!groupedProducts.has(code)) {
         size:       item.size,
         color:      item.color,
         base_price: item.base_price,
-        stock:      item.stock,
+        stock:      (item.stock !== undefined && item.stock !== null && item.stock !== '') ? Number(item.stock) : 1,
         sku:        item.sku || fallbackSku,
         barcode:    item.barcode,
-        // 🔥 FIX 3: Push the image URL into the variant object
         image:      item.image || null,
       })
     }
