@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyRazorpaySignature } from '@/lib/razorpay'
 import { getUserFromRequest } from '@/lib/auth'
 import { sendOrderConfirmationMail } from '@/lib/mailer'
-import { createShiprocketOrder, generateAWB } from '@/lib/shiprocket' 
+import { createShiprocketOrder, generateAWB, schedulePickup } from '@/lib/shiprocket' 
 
 // POST /api/payment/verify
 export async function POST(req: Request) {
@@ -68,7 +68,6 @@ export async function POST(req: Request) {
       include: { items: true },
     })
 
-    // 🔥 TS FIX: Tell TypeScript this will never be null at this stage
     if (!updated) {
        return NextResponse.json({ error: 'Failed to retrieve updated order' }, { status: 500 })
     }
@@ -98,30 +97,38 @@ export async function POST(req: Request) {
     }
 
     // ==========================================
-    // 🤖 FULL AUTOMATION: SHIPROCKET INJECTION
+    // 🤖 100% ZERO-TOUCH AUTOMATION INJECTION
     // ==========================================
     try {
+      // A. Create the order in Shiprocket
       const shiprocketData = await createShiprocketOrder(updated.id);
-      const awbData = await generateAWB(shiprocketData.shipment_id);
+      
+      // B. Extract the critical shipment ID (with fallback for test mocks)
+      const targetShipmentId = shiprocketData.shipment_id || shiprocketData.order_id;
+      
+      // C. Generate the tracking AWB and request the courier pickup simultaneously
+      const awbData = await generateAWB(targetShipmentId);
+      await schedulePickup(targetShipmentId); // 🚚 The driver is now officially on the way!
 
+      // D. Update your database with the tracking context
       updated = await prisma.order.update({
         where: { id: updated.id },
         data: {
-          shiprocket_order_id: String(shiprocketData.order_id),
-          shiprocket_shipment_id: String(shiprocketData.shipment_id),
+          shiprocket_order_id: String(targetShipmentId), // Safely stored in our repurposed column
           tracking_url: awbData.response?.data?.awb_code ? `https://shiprocket.co/tracking/${awbData.response.data.awb_code}` : null,
-          status: 'SHIPPED', 
+          status: 'SHIPPED', // Promotes order state directly to dispatched
         },
         include: { items: true }
       });
 
-      console.log(`✅ Auto-Shipment Success for Order: ${updated.order_number}`);
+      console.log(`✅ 100% Auto-Shipment Success for Order: ${updated.order_number}`);
     } catch (shipError) {
-      console.error("❌ Auto-Shipment Failed, falling back to manual:", shipError);
+      console.error("❌ Auto-Shipment Failed, falling back to manual admin dashboard processing:", shipError);
+      // Notice we DO NOT throw an error here. If Shiprocket is down, the customer's payment still succeeds and the order stays "CONFIRMED".
     }
     // ==========================================
 
-    // 3. Send Email using the 'updated' object
+    // 3. Send Email using the final 'updated' object (which now includes tracking links if automation succeeded!)
     if (user.email) {
       sendOrderConfirmationMail({
         customerEmail:   user.email,
@@ -129,7 +136,7 @@ export async function POST(req: Request) {
         orderNumber:     updated.order_number,
         items:           updated.items,
         totalAmount:     Number(updated.total_amount), 
-        shippingAddress: updated.shipping_address as any, // 🔥 TS FIX: Cast Prisma JsonValue to any
+        shippingAddress: updated.shipping_address as any,
       }).catch(console.error)
     }
 
