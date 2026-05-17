@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     }
 
     if (!user || user.role !== 'ADMIN') {
+      // 🔥 Restored missing backticks here
       console.log(`❌ DB Auth Denied: User role is ${user?.role || 'NOT_FOUND'} for ${decoded.email}`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -25,13 +26,13 @@ export async function POST(req: Request) {
     // Inject the custom claim if it's missing
     if ((decoded as any).role !== 'ADMIN') {
       await adminAuth.setCustomUserClaims(decoded.uid, { role: 'ADMIN' })
+      // 🔥 Restored missing backticks here
       console.log(`🔥 Firebase Custom Claim injected successfully for ${decoded.email}`);
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    // 🔥 FIX: Print the exact error to your server terminal logs
+  } catch (error: any) {
     console.error("🚨 verify-admin critical failure:", error)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized', details: error?.message }, { status: 401 })
   }
 }
