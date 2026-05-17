@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getAdminFromRequest } from '@/lib/auth' // 🔥 Added import
 
-// This file ONLY handles DELETE requests to /api/admin/insta-live/[id]/products/[productId]
 export async function DELETE(
   req: Request,
   _context: { params: Promise<{ id: string, productId: string }> }
 ) {
+  // 🔥 Security Check
+  const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const params = await _context.params
   try {
     await prisma.instaLiveProduct.deleteMany({

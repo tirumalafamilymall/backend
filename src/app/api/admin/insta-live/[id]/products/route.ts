@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getAdminFromRequest } from '@/lib/auth' // 🔥 Added import
 
-// This file ONLY handles POST requests to /api/admin/insta-live/[id]/products
 export async function POST(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+  // 🔥 Security Check
+  const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const params = await _context.params
   try {
     const { product_id } = await req.json()
 
     if (!product_id) return NextResponse.json({ error: 'product_id is required' }, { status: 400 })
 
-    // 🔥 FIX: Check both the 'id' and 'slug' columns
     const product = await prisma.product.findFirst({ 
       where: { 
         OR: [
@@ -26,7 +29,6 @@ export async function POST(
     if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
     const rawLink = await prisma.instaLiveProduct.create({
-      // 🔥 FIX: Ensure we save the actual database ID, even if the frontend sent the slug
       data: { insta_live_id: params.id, product_id: product.id },
       include: { 
         product: { include: { variants: true } }

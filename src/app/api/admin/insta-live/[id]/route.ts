@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getAdminFromRequest } from '@/lib/auth' // 🔥 Added import
 
 export async function PATCH(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+  // 🔥 Security Check
+  const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const params = await _context.params
   try {
     const { title, instagram_url, thumbnail, is_active, product_ids } = await req.json()
@@ -31,12 +36,11 @@ export async function PATCH(
       },
       include: {
         products: {
-          include: { product: { include: { variants: true } } }, // 🔥 Deep nesting
+          include: { product: { include: { variants: true } } }, 
         },
       },
     })
 
-    // Process the variants for each product in the updated post
     const post = {
       ...rawUpdated,
       products: rawUpdated.products.map(link => {
@@ -64,6 +68,10 @@ export async function DELETE(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+  // 🔥 Security Check
+  const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const params = await _context.params
   try {
     const post = await prisma.instaLive.findUnique({ where: { id: params.id } })
