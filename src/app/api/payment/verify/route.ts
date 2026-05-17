@@ -46,18 +46,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Order already paid' }, { status: 400 })
     }
 
-    let updated = await prisma.order.update({
-      where: { id: order.id },
+    // 🔥 ATOMIC UPDATE: Only update if UNPAID
+    const updatedOrderResult = await prisma.order.updateMany({
+      where: { id: order.id, payment_status: 'UNPAID' },
       data: {
         payment_status: 'PAID',
         payment_id:     razorpay_payment_id,
         status:         'CONFIRMED',
       },
+    })
+
+    // If 0, the webhook already processed this payment!
+    if (updatedOrderResult.count === 0) {
+       const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, include: { items: true }})
+       return NextResponse.json({ success: true, order: finalOrder })
+    }
+
+    // Now fetch the updated order to process stock and emails
+    let updated = await prisma.order.findUnique({
+      where: { id: order.id },
       include: { items: true },
     })
 
+    // 🔥 TS FIX: Tell TypeScript this will never be null at this stage
+    if (!updated) {
+       return NextResponse.json({ error: 'Failed to retrieve updated order' }, { status: 500 })
+    }
+
     // 1. Deduct stock NOW that payment is successful
-    // CHANGED: Deduct from the specific Variant, not the Parent
     await Promise.all(
       updated.items.map((item) => {
         if (item.variant_id) {
@@ -66,7 +82,7 @@ export async function POST(req: Request) {
             data:  { stock: { decrement: item.quantity } },
           })
         }
-        return Promise.resolve() // Fallback if variant_id is somehow missing
+        return Promise.resolve() 
       })
     )
 
@@ -93,7 +109,6 @@ export async function POST(req: Request) {
         data: {
           shiprocket_order_id: String(shiprocketData.order_id),
           shiprocket_shipment_id: String(shiprocketData.shipment_id),
-          // Need to add awb column to schema if it doesn't exist, using tracking_url as fallback
           tracking_url: awbData.response?.data?.awb_code ? `https://shiprocket.co/tracking/${awbData.response.data.awb_code}` : null,
           status: 'SHIPPED', 
         },
@@ -113,8 +128,8 @@ export async function POST(req: Request) {
         customerName:    user.name || 'Customer',
         orderNumber:     updated.order_number,
         items:           updated.items,
-        totalAmount:     Number(updated.total_amount), // Explicitly cast Decimal
-        shippingAddress: updated.shipping_address, 
+        totalAmount:     Number(updated.total_amount), 
+        shippingAddress: updated.shipping_address as any, // 🔥 TS FIX: Cast Prisma JsonValue to any
       }).catch(console.error)
     }
 

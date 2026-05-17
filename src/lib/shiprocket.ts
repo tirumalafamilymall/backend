@@ -3,29 +3,46 @@ import { prisma } from '@/lib/prisma'
 
 const BASE_URL = 'https://apiv2.shiprocket.in/v1/external'
 
-let cachedToken: string | null = null
-let tokenExpiry: number | null = null
-
 async function getToken(): Promise<string> {
   const now = Date.now()
 
-  if (cachedToken && tokenExpiry && now < tokenExpiry) {
-    return cachedToken
+  // 1. Check PostgreSQL database for existing token
+  const dbToken = await prisma.systemSetting.findUnique({ where: { key: 'SHIPROCKET_TOKEN' } })
+  const dbExpiry = await prisma.systemSetting.findUnique({ where: { key: 'SHIPROCKET_EXPIRY' } })
+
+  if (dbToken && dbExpiry && now < Number(dbExpiry.value)) {
+    return dbToken.value
   }
 
+  // 2. If no token or expired, fetch new one from Shiprocket
   const res = await axios.post(`${BASE_URL}/auth/login`, {
     email:    process.env.SHIPROCKET_EMAIL,
     password: process.env.SHIPROCKET_PASSWORD,
   })
 
-  cachedToken = res.data.token
-  tokenExpiry = now + 23 * 60 * 60 * 1000
-  return cachedToken!
+  const newToken = res.data.token
+  const newExpiry = (now + 23 * 60 * 60 * 1000).toString() // 23 hours
+
+  // 3. Save to DigitalOcean DB so all Vercel serverless instances share it
+  await prisma.systemSetting.upsert({
+    where: { key: 'SHIPROCKET_TOKEN' },
+    update: { value: newToken },
+    create: { key: 'SHIPROCKET_TOKEN', value: newToken }
+  })
+  
+  await prisma.systemSetting.upsert({
+    where: { key: 'SHIPROCKET_EXPIRY' },
+    update: { value: newExpiry },
+    create: { key: 'SHIPROCKET_EXPIRY', value: newExpiry }
+  })
+
+  return newToken
 }
 
 function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` }
 }
+// ... rest of the file remains exactly the same ...
 
 export async function createShiprocketOrder(orderId: string) {
   const order = await prisma.order.findUnique({

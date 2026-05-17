@@ -38,14 +38,19 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true })
       }
 
-      await prisma.order.update({
-        where: { id: order.id },
+// 🔥 ATOMIC UPDATE
+      const updatedOrderResult = await prisma.order.updateMany({
+        where: { id: order.id, payment_status: 'UNPAID' },
         data: {
           payment_status: 'PAID',
           payment_id: razorpay_payment_id,
           status: 'CONFIRMED',
         },
       })
+
+      if (updatedOrderResult.count === 0) {
+        return NextResponse.json({ received: true }) // Already processed by frontend
+      }
 
       // CHANGED: Webhook must also deduct stock from variants if the main route failed!
       await Promise.all(

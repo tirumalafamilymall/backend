@@ -232,3 +232,8 @@ model Storefront {
   content   Json
   updatedAt DateTime @updatedAt
 }
+
+model SystemSetting {
+  key   String @id
+  value String
+}
