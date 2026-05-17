@@ -45,8 +45,7 @@ if (!groupedProducts.has(code)) {
             subcategory:   item.subcategory,
             brand:         item.brand,
             slug:          generateSlug(item.name, code),
-            // 🔥 NEW: Check Excel for sales channel, default to MAIN_STORE
-            sales_channel: (item.sales_channel && item.sales_channel.toUpperCase() === 'INSTA_LIVE') ? 'INSTA_LIVE' : 'MAIN_STORE',
+            sales_channel: (item.sales_channel && String(item.sales_channel).trim().toUpperCase() === 'INSTA_LIVE') ? 'INSTA_LIVE' : 'MAIN_STORE',
           },
           variants: []
         })

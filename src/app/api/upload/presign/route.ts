@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { generatePresignedUrl } from '@/lib/storage'
 import { getUserFromRequest } from '@/lib/auth'
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4']
 const MAX_FILES = 10
 
 export async function GET(req: Request) {

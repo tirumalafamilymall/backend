@@ -14,8 +14,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
     }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4']
+    
 if (!allowedTypes.includes(file.type)) {
   return NextResponse.json(
     { error: 'Invalid file type' },
