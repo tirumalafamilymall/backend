@@ -1,18 +1,12 @@
 import admin from 'firebase-admin'
 
 if (!admin.apps.length) {
-  let privateKey = process.env.FIREBASE_PRIVATE_KEY
-
-  if (privateKey) {
-    // 1. Strip out wrapping double quotes if they were pasted accidentally
-    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-      privateKey = privateKey.slice(1, -1)
-    }
-    // 2. Clean up both raw and double-escaped newline characters securely
-    privateKey = privateKey.replace(/\\n/g, '\n')
-  }
-
   try {
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY || ''
+    
+    // 🔥 THE MAGIC FIX: This forces Vercel's broken string back into a valid cryptographic key
+    privateKey = privateKey.replace(/\\n/g, '\n').replace(/"/g, '')
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
@@ -20,9 +14,9 @@ if (!admin.apps.length) {
         privateKey: privateKey,
       }),
     })
-    console.log("🚀 Firebase Admin initialized successfully.")
-  } catch (initError: any) {
-    console.error("🚨 Firebase Admin initialization failed completely:", initError.message)
+    console.log("🚀 Firebase Admin initialized perfectly")
+  } catch (error: any) {
+    console.error("🚨 Firebase Init Failed:", error.message)
   }
 }
 
