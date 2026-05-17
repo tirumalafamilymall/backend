@@ -38,7 +38,8 @@ export async function GET(req: Request) {
             category: p.category,
             base_price: prices.length > 0 ? Math.min(...prices) : 0,
             stock: totalStock,
-            is_active: p.is_active
+            is_active: p.is_active,
+            variants: p.variants
           }
         }
       })

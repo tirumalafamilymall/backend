@@ -8,14 +8,37 @@ export async function GET(req: Request) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const posts = await prisma.instaLive.findMany({
+    const rawPosts = await prisma.instaLive.findMany({
       orderBy: { created_at: 'desc' },
       include: {
         products: {
-          include: { product: true }
+          include: { 
+            product: {
+              include: { variants: true } // 🔥 1. Tell Prisma to fetch the variants
+            } 
+          }
         }
       }
     })
+
+    const posts = rawPosts.map(post => ({
+      ...post,
+      products: post.products.map(link => {
+        const p = link.product
+        const prices = p.variants.map(v => Number(v.base_price))
+        const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
+        
+        return {
+          ...link,
+          product: {
+            ...p,
+            base_price: prices.length > 0 ? Math.min(...prices) : 0,
+            stock: totalStock
+          }
+        }
+      })
+    }))
+
     return NextResponse.json({ success: true, posts })
   } catch (error) {
     console.error('Fetch InstaLive Error:', error)
