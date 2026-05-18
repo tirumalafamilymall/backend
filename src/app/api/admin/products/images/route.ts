@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
 
-// ── ACTION 1: Generate URLs (INIT) ──────────────────────────
+    // ── ACTION 1: Generate URLs (INIT) ──────────────────────────
     if (body.action === 'INIT') {
       const { images } = body 
       const matched = []
@@ -19,9 +19,14 @@ export async function POST(req: Request) {
         const codePart = parts[0]?.trim()
         const colorPart = parts[1]?.trim()
 
-        // 2. Direct lookup for the product
-        const product = await prisma.product.findUnique({
-          where: { product_code: codePart },
+        // 🔥 FIX: Use findFirst with case-insensitive matching!
+        const product = await prisma.product.findFirst({
+          where: { 
+            product_code: {
+              equals: codePart,
+              mode: 'insensitive' // This ignores TFM42 vs tfm42 differences
+            }
+          },
           include: { variants: true }
         })
 
@@ -73,13 +78,13 @@ export async function POST(req: Request) {
           if (ids.length === 0) throw new Error("No IDs provided for update")
 
           if (update.targetType === 'VARIANT') {
-            // 🔥 Update all matching variants (S, M, L) at once
+            // Update all matching variants (S, M, L) at once
             await prisma.productVariant.updateMany({
               where: { id: { in: ids } },
               data: { image: update.publicUrl }
             })
           } else {
-            // 👗 Update the parent product gallery
+            // Update the parent product gallery
             for (const id of ids) {
               await prisma.product.update({
                 where: { id },
