@@ -4,6 +4,7 @@ import { verifyRazorpaySignature } from '@/lib/razorpay'
 import { getUserFromRequest } from '@/lib/auth'
 import { sendOrderConfirmationMail } from '@/lib/mailer'
 import { createShiprocketOrder, generateAWB, schedulePickup } from '@/lib/shiprocket' 
+import { sendOrderConfirmationWhatsApp } from '@/lib/whatsapp'
 
 // POST /api/payment/verify
 export async function POST(req: Request) {
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
     }
     // ==========================================
 
-    // 3. Send Email using the final 'updated' object (which now includes tracking links if automation succeeded!)
+// 3. Send Notifications (Email & WhatsApp)
     if (user.email) {
       sendOrderConfirmationMail({
         customerEmail:   user.email,
@@ -138,6 +139,17 @@ export async function POST(req: Request) {
         totalAmount:     Number(updated.total_amount), 
         shippingAddress: updated.shipping_address as any,
       }).catch(console.error)
+    }
+
+    // 🔥 ADDED: Instantly ping customer's WhatsApp
+    const phone = (updated.shipping_address as any)?.phone;
+    if (phone) {
+      sendOrderConfirmationWhatsApp(
+        phone, 
+        user.name || 'Valued Customer', 
+        updated.order_number, 
+        `₹${Number(updated.total_amount).toLocaleString('en-IN')}`
+      ).catch(console.error) // Non-blocking!
     }
 
     return NextResponse.json({ success: true, order: updated })

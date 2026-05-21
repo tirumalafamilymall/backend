@@ -66,9 +66,10 @@ if (!groupedProducts.has(code)) {
       })
     }
 
-    // ── Step 2: Process Database Upserts ─────────────────────────────────
+  // ── Step 2: Process Database Upserts ─────────────────────────────────
     let parentProcessed = 0
-    let variantsProcessed = 0
+    let variantsCreated = 0 // 🔥 NEW: Explicitly tracking creates
+    let variantsUpdated = 0 // 🔥 NEW: Explicitly tracking updates
     const failedRows: any[] = []
 
     // We process sequentially to catch individual errors gracefully
@@ -90,8 +91,6 @@ if (!groupedProducts.has(code)) {
 
         // B. Upsert the Child Variants
         for (const v of group.variants) {
-          // Because Prisma compound unique upserts with nulls can be tricky,
-          // we explicitly find the variant first to decide whether to create or update.
           const existingVariant = await prisma.productVariant.findFirst({
             where: {
               product_id: parent.id,
@@ -108,10 +107,10 @@ if (!groupedProducts.has(code)) {
                 stock:      v.stock, 
                 sku:        v.sku,
                 barcode:    v.barcode,
-                // 🔥 FIX 4: Save image URL on update
                 image:      v.image || null, 
               }
             })
+            variantsUpdated++ // 🔥 Counted as an Update
           } else {
             await prisma.productVariant.create({
               data: {
@@ -122,12 +121,11 @@ if (!groupedProducts.has(code)) {
                 stock:      v.stock,
                 sku:        v.sku,
                 barcode:    v.barcode,
-                // 🔥 FIX 5: Save image URL on create
                 image:      v.image || null, 
               }
             })
+            variantsCreated++ // 🔥 Counted as a Create
           }
-          variantsProcessed++
         }
       } catch (err: any) {
         console.error(`Failed processing group ${code}:`, err)
@@ -139,8 +137,8 @@ if (!groupedProducts.has(code)) {
       success: true,
       summary: {
         total_excel_rows: products.length,
-        parents_processed: parentProcessed,
-        variants_processed: variantsProcessed,
+        created: variantsCreated, // Sending accurate counts to frontend
+        updated: variantsUpdated,
         failed: failedRows.length,
         parse_errors: parseErrors.length,
       },

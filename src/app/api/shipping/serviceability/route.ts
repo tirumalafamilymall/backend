@@ -12,45 +12,47 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Valid 6-digit pincode is required' }, { status: 400 })
     }
 
-    // 2. Define pickup postcode from ENV
-    const pickup_postcode = process.env.STORE_PINCODE!
+    // 🔥 FIX 1: Safety check for the environment variable
+    const pickup_postcode = process.env.STORE_PINCODE
+    if (!pickup_postcode) {
+      console.error("❌ ERROR: STORE_PINCODE is missing from your .env file!")
+    }
 
     try {
       // 3. Try real Shiprocket call
-      const data = await checkServiceability(pickup_postcode, pincode, 0.5, cod)
+      const data = await checkServiceability(pickup_postcode || '500001', pincode, 0.5, cod)
       const available_couriers = data?.data?.available_courier_companies || []
 
-      // 4. MOCK FALLBACK: If wallet is empty (0 couriers)
+      // 4. If wallet is empty or pincode is totally unserviceable
       if (available_couriers.length === 0) {
         return NextResponse.json({
           success: true,
-          is_serviceable: true, 
-          shipping_cost: 59, // Mock fee based on your screenshot
-          couriers: 1,
-          estimated_days: 3,
-          note: "Testing Mode: Wallet balance 0, using mock rates" 
+          is_serviceable: false, 
+          error: "Sorry, no couriers are currently available for this route."
         })
       }
 
-      // 5. If real couriers ARE found (after you recharge)
-      const actual_cost = available_couriers[0]?.freight_charge || 0
+      // 🔥 FIX 2: Check both 'rate' and 'freight_charge' formats from Shiprocket
+      const best_courier = available_couriers[0]
+      const actual_cost = best_courier?.rate || best_courier?.freight_charge || 59
 
       return NextResponse.json({
         success: true,
         is_serviceable: true,
-        shipping_cost: Number(actual_cost),
+        shipping_cost: Math.round(Number(actual_cost)),
         couriers: available_couriers.length,
-        estimated_days: available_couriers[0]?.estimated_delivery_days || null,
+        estimated_days: best_courier?.estimated_delivery_days || null,
       })
 
-    } catch (apiErr) {
-      // If Shiprocket API is totally down/unauthorized, still fallback so you can test
-      console.error("Shiprocket API Error:", apiErr)
+    } catch (apiErr: any) {
+      // 🔥 FIX 3: Print the ACTUAL error from Shiprocket to your terminal
+      console.error("❌ Shiprocket API Error:", apiErr?.response?.data || apiErr.message)
+      
       return NextResponse.json({
         success: true,
         is_serviceable: true,
         shipping_cost: 59,
-        note: "Testing Mode: API failure fallback"
+        note: "API failure fallback activated"
       })
     }
 

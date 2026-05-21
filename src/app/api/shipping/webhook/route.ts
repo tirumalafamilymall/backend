@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sendShippingUpdateWhatsApp } from '@/lib/whatsapp'
 
 // POST /api/shipping/webhook
 // Shiprocket calls this to update shipment status automatically
@@ -37,21 +38,30 @@ export async function POST(req: Request) {
       'READY TO SHIP':              'CONFIRMED',
     }
 
-    const mappedStatus = statusMap[current_status?.toUpperCase()]
+const mappedStatus = statusMap[current_status?.toUpperCase()]
 
     if (mappedStatus) {
+      const trackingUrl = awb_code ? `https://shiprocket.co/tracking/${awb_code}` : null
+
       await prisma.order.update({
         where: { id: order.id },
         data: {
           status: mappedStatus as any,
-          ...(awb_code && {
-            tracking_url: `https://shiprocket.co/tracking/${awb_code}`,
-          }),
+          ...(trackingUrl && { tracking_url: trackingUrl }),
         },
       })
+
+      // 🔥 ADDED: If the status just changed to SHIPPED and we have a tracking URL, WhatsApp them!
+      if (mappedStatus === 'SHIPPED' && trackingUrl) {
+        const phone = (order.shipping_address as any)?.phone;
+        if (phone) {
+          sendShippingUpdateWhatsApp(phone, order.order_number, trackingUrl).catch(console.error);
+        }
+      }
     }
 
     return NextResponse.json({ success: true })
+    
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Webhook failed' }, { status: 500 })
