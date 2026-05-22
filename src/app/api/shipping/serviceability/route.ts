@@ -33,7 +33,11 @@ export async function GET(req: Request) {
       }
 
       // 🔥 FIX 2: Check both 'rate' and 'freight_charge' formats from Shiprocket
-      const best_courier = available_couriers[0]
+    const best_courier = available_couriers.sort((a: any, b: any) => {
+  const aRate = a.rate || a.freight_charge || 999
+  const bRate = b.rate || b.freight_charge || 999
+  return aRate - bRate
+})[0]
       const actual_cost = best_courier?.rate || best_courier?.freight_charge || 59
 
       return NextResponse.json({
