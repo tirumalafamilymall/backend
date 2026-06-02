@@ -45,6 +45,10 @@ const COLUMN_MAP: Record<string, string> = {
   'image_url':    'image',
   'img':          'image',
   'photo':        'image',
+
+  'sales_channel': 'sales_channel',
+  'channel':       'sales_channel',
+  'sales channel': 'sales_channel',
 }
 
 function normalizeKey(key: string): string {
@@ -127,6 +131,7 @@ export function parseExcelBuffer(buffer: Buffer): {
       
       // 🔥 FIX 2: Push the image URL into the output array
       image:        normalized.image   ? String(normalized.image).trim()   : null,
+      sales_channel: normalized.sales_channel ? String(normalized.sales_channel).trim() : null,
     })
   })
 
