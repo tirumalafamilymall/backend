@@ -3,8 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { generateAWB, schedulePickup } from '@/lib/shiprocket'
 
 // POST /api/admin/shipping/awb
-// Body: { order_id, shipment_id }
-// Call after /api/admin/shipping/create
 async function handlePOST(req: Request) {
   try {
     const { order_id, shipment_id } = await req.json()
@@ -19,16 +17,28 @@ async function handlePOST(req: Request) {
     const order = await prisma.order.findUnique({ where: { id: order_id } })
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    // Generate AWB (assigns courier + tracking number)
+    // 1. Generate AWB (assigns courier + tracking number)
     const awbData = await generateAWB(shipment_id)
+    
+    // Extract values safely from Shiprocket's standard API response payload
+    const extractedAwb = awbData?.response?.awb_code || null
+    const extractedTrackUrl = awbData?.response?.tracking_url || null
 
-    // Schedule pickup immediately after AWB
+    if (!extractedAwb) {
+      console.error("❌ Shiprocket did not return an AWB code:", awbData)
+    }
+
+    // 2. Schedule pickup immediately after AWB
     const pickupData = await schedulePickup(shipment_id)
 
-    // Update order status to SHIPPED
+    // 3. 🔥 FIX 2: Save the tracking data into your Prisma database!
     const updated = await prisma.order.update({
       where: { id: order_id },
-      data:  { status: 'SHIPPED' },
+      data: { 
+        status: 'SHIPPED',
+        awb_code: extractedAwb ? String(extractedAwb) : null,
+        tracking_url: extractedTrackUrl ? String(extractedTrackUrl) : null
+      },
     })
 
     return NextResponse.json({

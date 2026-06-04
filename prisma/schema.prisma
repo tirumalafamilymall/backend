@@ -127,6 +127,7 @@ model Order {
   shipping_address    Json
   shiprocket_order_id String?
   tracking_url        String?
+  awb_code            String?
   notes               String?
   created_at          DateTime      @default(now())
   updated_at          DateTime      @updatedAt
