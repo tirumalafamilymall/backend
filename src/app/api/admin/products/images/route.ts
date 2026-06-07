@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generatePresignedUrl } from '@/lib/storage'
+import { getAdminFromRequest } from '@/lib/auth'
 
 export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
+    // 🔥 Updated logic to use your existing helper
+    const admin = await getAdminFromRequest(req)
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized or Forbidden' }, { status: 401 })
+    }
+
     const body = await req.json()
 
     // ── ACTION 1: Generate URLs (INIT) ──────────────────────────
