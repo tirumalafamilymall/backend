@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Department, SalesChannel } from '@prisma/client' // 🔥 Added SalesChannel import
+import { Department, SalesChannel } from '@prisma/client'
 
 export async function GET(req: Request) {
   try {
@@ -20,8 +20,8 @@ export async function GET(req: Request) {
     const page        = parseInt(searchParams.get('page') || '1')
     const limit       = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
     
-    // 🔥 NEW: Allow frontend to request Insta Live products, defaults to MAIN_STORE
-    const sales_channel = searchParams.get('sales_channel') || 'MAIN_STORE'
+    // CHANGED: Do not force a fallback to 'MAIN_STORE'. If null, we include both channels.
+    const sales_channel = searchParams.get('sales_channel') 
 
     const variantFilter: any = {}
     if (color) variantFilter.color = { equals: color, mode: 'insensitive' }
@@ -37,7 +37,8 @@ export async function GET(req: Request) {
     const where: any = {
       is_active: true,
       is_deleted: false,
-      sales_channel: sales_channel as SalesChannel, // 🔥 Now dynamic!
+      // CHANGED: Only filter by channel if explicitly requested by the route parameters
+      ...(sales_channel && { sales_channel: sales_channel as SalesChannel }), 
       ...(department  && { department: department.toUpperCase() as Department }),
       ...(category    && { category: { equals: category, mode: 'insensitive' } }),
       ...(subcategory && { subcategory: { equals: subcategory, mode: 'insensitive' } }),

@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       where: {
         is_active: true,
         is_deleted: false,
-        sales_channel: 'MAIN_STORE',
+        // CHANGED: Removed sales_channel: 'MAIN_STORE' restriction to query across all items
         OR: [
           { name:         { contains: q, mode: 'insensitive' } },
           { brand:        { contains: q, mode: 'insensitive' } },
@@ -35,9 +35,6 @@ export async function GET(req: Request) {
       const stock    = p.variants.reduce((sum, v) => sum + v.stock, 0)
       const prices   = p.variants.map(v => Number(v.base_price))
       const basePrice = prices.length > 0 ? Math.min(...prices) : 0
-
-      // ✅ FIX: Excel-uploaded products store images on variants, not the parent.
-      // Check variant images first, then fall back to parent images array.
       const image = p.variants.find(v => v.image)?.image || p.images?.[0] || null
 
       return {
@@ -46,7 +43,7 @@ export async function GET(req: Request) {
         category:   p.category,
         base_price: basePrice,
         images:     p.images,
-        image,        // ✅ single resolved image for ProductCard to use directly
+        image,        
         stock,
       }
     })
