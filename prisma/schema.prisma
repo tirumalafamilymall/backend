@@ -121,6 +121,10 @@ model Order {
   status              OrderStatus   @default(PENDING)
   total_amount        Decimal       @db.Decimal(10,2) // DECIMAL
   shipping_amount     Decimal       @db.Decimal(10,2) @default(0) // DECIMAL
+  discount_amount     Decimal       @db.Decimal(10,2) @default(0)
+  coupon_code         String?
+  coupon_id           String?
+  coupon              Coupon?       @relation(fields: [coupon_id], references: [id])
   payment_status      PaymentStatus @default(UNPAID)
   payment_id          String?
   razorpay_order_id   String?
@@ -237,4 +241,22 @@ model Storefront {
 model SystemSetting {
   key   String @id
   value String
+}
+
+
+// ─── COUPONS ────────────────────────────────────────────────
+
+model Coupon {
+  id               String   @id @default(uuid())
+  name             String   // e.g., "Grand Launch Offer"
+  code             String   @unique // e.g., "LAUNCH7"
+  description      String?
+  discount_percent Decimal  @db.Decimal(5,2) // e.g., 7.00
+  min_order_value  Decimal  @db.Decimal(10,2) @default(0) // Before shipping
+  expires_at       DateTime
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  
+  orders           Order[]
 }

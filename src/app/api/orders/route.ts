@@ -22,14 +22,13 @@ export async function GET(req: Request) {
   }
 }
 
-
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // 🔥 REMOVED shipping_amount from the request body
-    const { shipping_address, notes } = await req.json()
+    // 🔥 Added coupon_code extraction
+    const { shipping_address, notes, coupon_code } = await req.json()
 
     if (!shipping_address) {
       return NextResponse.json({ error: 'shipping_address is required' }, { status: 400 })
@@ -64,30 +63,56 @@ export async function POST(req: Request) {
       cart_subtotal += Number(item.variant.base_price) * item.quantity;
     }
 
-    // 🔥 NEW: Server-Side Shipping Calculation
+    // 🔥 NEW: SECURE COUPON VALIDATION & MATH
+    let discount_amount = 0;
+    let applied_coupon_id = null;
+
+    if (coupon_code) {
+      const coupon = await prisma.coupon.findUnique({
+        where: { code: coupon_code.toUpperCase() }
+      })
+
+      if (!coupon || !coupon.is_active) {
+        return NextResponse.json({ error: 'Invalid coupon code' }, { status: 400 })
+      }
+      if (new Date() > coupon.expires_at) {
+        return NextResponse.json({ error: 'Coupon has expired' }, { status: 400 })
+      }
+      if (cart_subtotal < Number(coupon.min_order_value)) {
+        return NextResponse.json({ error: `Minimum order value for this coupon is ₹${coupon.min_order_value}` }, { status: 400 })
+      }
+
+      discount_amount = (cart_subtotal * Number(coupon.discount_percent)) / 100;
+      applied_coupon_id = coupon.id;
+    }
+
     let server_shipping_amount = 0;
     try {
-      const pickup_postcode = process.env.STORE_PINCODE || '532201'; // Fallback to Tekkali pin if env missing
-      const shipData = await checkServiceability(pickup_postcode, pincode, 0.5, false); // COD is strictly false
+      const pickup_postcode = process.env.STORE_PINCODE || '532201'; 
+      const shipData = await checkServiceability(pickup_postcode, pincode, 0.5, false); 
       
       if (shipData?.data?.available_courier_companies?.length > 0) {
         server_shipping_amount = Number(shipData.data.available_courier_companies[0].freight_charge);
       } else {
-        server_shipping_amount = 59; // Fallback to mock rate
+        server_shipping_amount = 59; 
       }
     } catch (error) {
       console.warn("Shipping calc failed, using fallback:", error);
       server_shipping_amount = 59;
     }
 
-    const total_amount = cart_subtotal + server_shipping_amount
+    // Math: Subtotal - Discount + Shipping
+    const total_amount = cart_subtotal - discount_amount + server_shipping_amount
 
     const order = await prisma.order.create({
       data: {
         order_number:    generateOrderNumber(),
         user_id:         user.id,
         total_amount,    
-        shipping_amount: server_shipping_amount, // 🔥 Uses server calculated value
+        shipping_amount: server_shipping_amount,
+        discount_amount: discount_amount, // 🔥 Saved
+        coupon_code:     coupon_code ? coupon_code.toUpperCase() : null, // 🔥 Saved
+        coupon_id:       applied_coupon_id, // 🔥 Saved Relation
         shipping_address,
         notes:           notes || null,
         status:          'PENDING',
