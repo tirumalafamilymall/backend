@@ -40,10 +40,10 @@ export async function proxy(req: NextRequest) {
       audience: FIREBASE_PROJECT_ID,
     })
 
-    // STRICT EDGE ROLE CHECK
-    if ((payload as any).role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
-    }
+    // // STRICT EDGE ROLE CHECK
+    // if ((payload as any).role !== 'ADMIN') {
+    //   return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 })
+    // }
 
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set('x-firebase-uid', payload.sub as string)
