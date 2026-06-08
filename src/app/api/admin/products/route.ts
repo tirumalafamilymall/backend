@@ -147,11 +147,13 @@ export async function POST(req: Request) {
       where: { product_code: final_product_code }
     })
 
-    if (existingProduct) {
-      // 2. PRODUCT EXISTS: Append the new size/color to the existing parent
+  if (existingProduct) {
+      // Create the variant AND push the new image to the parent's gallery
       const updatedProduct = await prisma.product.update({
         where: { id: existingProduct.id },
         data: {
+          // 🔥 Add this line to update the parent's image gallery
+          images: images && images.length > 0 ? { push: images[0] } : undefined,
           variants: {
             create: {
               base_price: parseFloat(base_price),
