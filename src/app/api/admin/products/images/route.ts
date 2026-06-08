@@ -21,10 +21,28 @@ export async function POST(req: Request) {
       const matched = []
       const unmatched = []
 
-      for (const img of images) {
-        const parts = img.productCode.toUpperCase().split('_')
-        const codePart = parts[0]?.trim()
-        const colorPart = parts[1]?.trim()
+for (const img of images) {
+        let codePart = img.productCode.toUpperCase().trim()
+        let colorPart = undefined
+
+        // SMART SPLIT: Supports both Underscore (_) and Hyphen (-)
+        if (codePart.includes('_')) {
+          const parts = codePart.split('_')
+          codePart = parts[0].trim()
+          colorPart = parts[1]?.trim()
+        } else if (codePart.includes('-')) {
+          // Find the LAST hyphen to handle codes like TFM-001-RED
+          const lastDash = codePart.lastIndexOf('-')
+          const potentialCode = codePart.substring(0, lastDash).trim()
+          const potentialColor = codePart.substring(lastDash + 1).trim()
+          
+          // Safety check: Only accept the color if it's purely letters (e.g., RED, BLUE). 
+          // This prevents breaking normal product codes like "TFM-001".
+          if (/^[A-Z]+$/.test(potentialColor)) {
+            codePart = potentialCode
+            colorPart = potentialColor
+          }
+        }
 
         // 🔥 FIX: Use findFirst with case-insensitive matching!
         const product = await prisma.product.findFirst({

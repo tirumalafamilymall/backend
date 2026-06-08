@@ -3,11 +3,16 @@ import { prisma } from '@/lib/prisma'
 import { parseExcelBuffer } from '@/lib/excel'
 import { generateSlug } from '@/lib/slug'
 import { Department } from '@prisma/client'
+import { getAdminFromRequest } from '@/lib/auth'
 
 export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
+    const admin = await getAdminFromRequest(req)
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const formData = await req.formData()
     const file = formData.get('file') as File
 
