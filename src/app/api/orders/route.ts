@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     let discount_amount = 0;
     let applied_coupon_id = null;
 
-    if (coupon_code) {
+if (coupon_code) {
       const coupon = await prisma.coupon.findUnique({
         where: { code: coupon_code.toUpperCase() }
       })
@@ -81,6 +81,20 @@ export async function POST(req: Request) {
       if (cart_subtotal < Number(coupon.min_order_value)) {
         return NextResponse.json({ error: `Minimum order value for this coupon is ₹${coupon.min_order_value}` }, { status: 400 })
       }
+
+      // 🔥 FINAL SECURITY PATCH: Stop hackers from bypassing the frontend
+      const pastOrder = await prisma.order.findFirst({
+        where: {
+          user_id: user.id,
+          coupon_id: coupon.id,
+          status: { not: 'CANCELLED' }
+        }
+      })
+
+      if (pastOrder) {
+        return NextResponse.json({ error: 'You have already used this coupon code.' }, { status: 403 })
+      }
+      // 🔥 --------------------------------------------------------
 
       discount_amount = (cart_subtotal * Number(coupon.discount_percent)) / 100;
       applied_coupon_id = coupon.id;

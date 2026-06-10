@@ -87,17 +87,69 @@ export async function DELETE(
 ) {
   const params = await _context.params
   try {
-    const product = await prisma.product.findUnique({ where: { id: params.id } })
-    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    const { searchParams } = new URL(req.url)
+    const variant_id = searchParams.get('variant_id')
 
+    if (variant_id) {
+      // 1. Delete the specific variant
+      await prisma.productVariant.delete({
+        where: { id: variant_id }
+      })
+
+      // 2. Check if the parent has any variants left
+      const remainingVariants = await prisma.productVariant.count({
+        where: { product_id: params.id }
+      })
+
+      // 3. If that was the last variant, soft-delete the parent so it hides from the store
+      // 🔥 WE USE THE RENAME TRICK HERE TOO
+      if (remainingVariants === 0) {
+        const product = await prisma.product.findUnique({ where: { id: params.id } })
+        if (product) {
+          const timestamp = Date.now()
+          await prisma.product.update({
+            where: { id: params.id },
+            data: { 
+              is_deleted: true, 
+              is_active: false,
+              product_code: `${product.product_code}-DEL-${timestamp}`, 
+              slug: `${product.slug}-del-${timestamp}` 
+            },
+          })
+        }
+      }
+
+      return NextResponse.json({ success: true, message: 'Variant deleted' })
+    }
+
+    // ─── FALLBACK: NO VARIANT_ID PROVIDED (DELETE ENTIRE PARENT) ───
+    
+    // 1. Fetch the product first so we know its current code and slug
+    const product = await prisma.product.findUnique({
+      where: { id: params.id }
+    })
+
+    if (!product) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    }
+
+    // 2. Soft delete it, but FREE UP the product_code and slug!
+    const timestamp = Date.now();
     const updated = await prisma.product.update({
       where: { id: params.id },
-      data:  { is_deleted: true, is_active: false }, 
+      data:  { 
+        is_deleted: true, 
+        is_active: false,
+        product_code: `${product.product_code}-DEL-${timestamp}`, // 🔥 Frees up the code
+        slug: `${product.slug}-del-${timestamp}` // 🔥 Frees up the URL slug
+      }, 
     })
 
     return NextResponse.json({ success: true, product: updated })
+    // ─────────────────────────────────────────────────────────────
+    
   } catch (error) {
     console.error(error)
-    return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete product or variant' }, { status: 500 })
   }
 }
