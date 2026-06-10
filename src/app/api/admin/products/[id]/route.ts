@@ -51,7 +51,6 @@ export async function PATCH(
         ...(subcategory !== undefined && { subcategory }),
         ...(brand       !== undefined && { brand }),
         ...(images      !== undefined && { images }),
-        ...(is_active   !== undefined && { is_active }),
         ...(sales_channel !== undefined && { sales_channel }), // 🔥 NEW
       },
     })
@@ -67,6 +66,7 @@ export async function PATCH(
           ...(stock      !== undefined && { stock: parseInt(stock) }),
           ...(barcode    !== undefined && { barcode }),
           ...(image      !== undefined && { image }), 
+          ...(is_active  !== undefined && { is_active }),
         }
       })
     }

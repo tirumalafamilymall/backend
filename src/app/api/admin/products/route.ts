@@ -78,7 +78,8 @@ export async function GET(req: Request) {
             barcode: v.barcode || '',
             sku: v.sku || '',
             // Use the specific variant image, or fallback to the parent's first image
-            image: v.image || (p.images && p.images.length > 0 ? p.images[0] : null)
+            image: v.image || (p.images && p.images.length > 0 ? p.images[0] : null),
+            is_active: v.is_active,
           })
         })
       }

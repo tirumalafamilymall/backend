@@ -91,6 +91,8 @@ if (!groupedProducts.has(code)) {
             subcategory: group.parentData.subcategory,
             brand:       group.parentData.brand,
             sales_channel: group.parentData.sales_channel,
+            is_deleted:    false,
+            is_active:     true,
           }
         })
         parentProcessed++

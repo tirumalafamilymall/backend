@@ -60,13 +60,19 @@ export async function GET(req: Request) {
         where,
         orderBy: { created_at: 'desc' }, 
         skip: (page - 1) * limit,
-        take: limit,
-        include: { variants: true } 
+
+        include: { 
+          variants: {
+            where: { is_active: true }
+          } 
+        } 
       }),
       prisma.product.count({ where }),
     ])
 
-    let products = rawProducts.map(p => {
+let products = rawProducts
+      .filter(p => p.variants.length > 0) 
+      .map(p => {
       const totalStock = p.variants.reduce((sum, v) => sum + v.stock, 0)
       const prices = p.variants.map(v => Number(v.base_price))
       const basePrice = prices.length > 0 ? Math.min(...prices) : 0
