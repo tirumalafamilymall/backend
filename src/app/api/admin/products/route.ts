@@ -203,11 +203,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, product }, { status: 201 })
 
-  } catch (error: any) {
+} catch (error: any) {
     console.error(error)
     if (error.code === 'P2002') {
       return NextResponse.json({ 
-        error: 'A variant with this Size/Color already exists for this product code.' 
+        // 🔥 Make it clear what failed
+        error: 'A variant with this Size/Color OR this Barcode already exists.' 
       }, { status: 409 })
     }
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
