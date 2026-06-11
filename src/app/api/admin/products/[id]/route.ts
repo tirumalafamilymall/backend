@@ -71,10 +71,11 @@ export async function PATCH(
       })
     }
 
-    return NextResponse.json({ success: true, product: updatedProduct })
-  } catch (error: any) {
+} catch (error: any) {
     if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'Another variant already exists with this Size and Color.' }, { status: 409 })
+      return NextResponse.json({ 
+        error: 'Conflict: Another variant already exists with this Size/Color, or Barcode.' 
+      }, { status: 409 })
     }
     return NextResponse.json({ error: 'Failed to update product' }, { status: 500 })
   }
