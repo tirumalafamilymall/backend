@@ -37,31 +37,27 @@ export async function POST(req: Request) {
       }, { status: 404 })
     }
 
-    // 3. The Negative Stock Safety Net
-    // We allow the scan to proceed so the checkout line doesn't stop, 
-    // but we flag it so the manager knows they have an inventory mismatch.
-    const isNegativeStock = variant.stock <= 0
-
-    // 4. Deduct the stock
+// 1. Let the database do the math FIRST
     const updatedVariant = await prisma.productVariant.update({
       where: { id: variant.id },
-      data: { stock: { decrement: 1 } }
+      data: { stock: { decrement: 1 } },
+      include: { product: true } // 🔥 Added this back so the frontend gets the Name!
     })
 
-    // 5. Return the payload to the frontend
-    return NextResponse.json({
-      success: true,
-      message: 'Stock updated',
-      item: {
-        name: variant.product.name,
-        price: variant.base_price,
-        color: variant.color,
-        size: variant.size,
-        new_stock: updatedVariant.stock,
-        warning: isNegativeStock ? 'Stock dropped below zero!' : null
-      }
-    })
+    // 2. Evaluate the warning based on the NEW exact reality
+    let warning = null
+    if (updatedVariant.stock < 0) {
+      warning = '⚠️ Stock dropped below zero! Inventory mismatch.'
+    } else if (updatedVariant.stock === 0) {
+      warning = 'Last unit sold. Variant is now out of stock.'
+    }
 
+    // 3. Send the response back to the POS scanner tab
+    return NextResponse.json({ 
+      success: true, 
+      variant: updatedVariant,
+      warning 
+    })
   } catch (error) {
     console.error('POS Scan Error:', error)
     return NextResponse.json({ error: 'System error during scan' }, { status: 500 })

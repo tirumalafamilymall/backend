@@ -1,28 +1,43 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    // Only fetch coupons that are active and have an expiration date in the future
+    // 1. Check if the frontend sent a user ID in the URL
+    const { searchParams } = new URL(req.url)
+    const uid = searchParams.get('uid')
+    
+    let usedCouponIds: string[] = []
+
+    // 2. If we have a user, look up their past successful orders
+    if (uid) {
+      const user = await prisma.user.findUnique({ where: { firebase_uid: uid } })
+      if (user) {
+        const pastOrders = await prisma.order.findMany({
+          where: { 
+            user_id: user.id, 
+            coupon_id: { not: null }, 
+            status: { not: 'CANCELLED' } 
+          },
+          select: { coupon_id: true }
+        })
+        usedCouponIds = pastOrders.map(o => o.coupon_id as string)
+      }
+    }
+
+    // 3. Fetch active coupons, EXCLUDING the ones they already used!
     const activeCoupons = await prisma.coupon.findMany({
       where: {
         is_active: true,
-        expires_at: {
-          gt: new Date() // Must be strictly greater than right now
-        }
+        expires_at: { gt: new Date() },
+        // 🔥 The Magic Filter: If they have used coupons, exclude those IDs
+        ...(usedCouponIds.length > 0 ? { id: { notIn: usedCouponIds } } : {}) 
       },
-      // Do not select the internal description or other sensitive admin info if you want to keep it light
       select: {
-        id: true,
-        name: true,
-        code: true,
-        discount_percent: true,
-        min_order_value: true,
-        expires_at: true,
+        id: true, name: true, code: true, discount_percent: true, 
+        min_order_value: true, expires_at: true
       },
-      orderBy: {
-        created_at: 'desc'
-      }
+      orderBy: { created_at: 'desc' }
     })
 
     return NextResponse.json({ success: true, coupons: activeCoupons })
