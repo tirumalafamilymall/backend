@@ -76,7 +76,7 @@ model ProductVariant {
   image       String?     
   base_price  Decimal     @db.Decimal(10,2) 
   stock       Int         @default(0)
-  barcode     String? 
+  barcode     String?     @unique
   is_active   Boolean     @default(true) 
   created_at  DateTime    @default(now())
   updated_at  DateTime    @updatedAt
