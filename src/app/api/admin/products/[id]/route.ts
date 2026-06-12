@@ -55,31 +55,41 @@ export async function PATCH(
       },
     })
 
-    // 2. Update ONLY the specific variant selected in the Admin table
+// 2. Update ONLY the specific variant selected in the Admin table
     if (variant_id) {
       await prisma.productVariant.update({
         where: { id: variant_id },
         data: {
-          ...(base_price !== undefined && { base_price: parseFloat(base_price) }),
-
+          ...(base_price !== undefined && base_price !== '' && { base_price: parseFloat(base_price) }),
+          ...(stock      !== undefined && stock !== '' && { stock: parseInt(stock) }),
+          
+          // Our working text nullifiers
           ...(color      !== undefined && { color: color || null }),
           ...(size       !== undefined && { size: size || null }),
           ...(barcode    !== undefined && { barcode: barcode || null }),
           
-          ...(stock      !== undefined && { stock: parseInt(stock) }),
           ...(image      !== undefined && { image }), 
           ...(is_active  !== undefined && { is_active }),
         }
       })
     }
 
-} catch (error: any) {
+    // 🔥 YOU NEED THIS LINE TO TELL THE FRONTEND IT WORKED!
+    return NextResponse.json({ success: true, product: updatedProduct })
+
+  } catch (error: any) {
+    console.error("PATCH Error:", error)
+    
     if (error.code === 'P2002') {
       return NextResponse.json({ 
         error: 'Conflict: Another variant already exists with this Size/Color, or Barcode.' 
       }, { status: 409 })
     }
-    return NextResponse.json({ error: 'Failed to update product' }, { status: 500 })
+    
+    // 🔥 If it's a 500 error, spit out the exact Prisma error so we aren't guessing!
+    return NextResponse.json({ 
+      error: error.message || 'Failed to update product' 
+    }, { status: 500 })
   }
 }
 
