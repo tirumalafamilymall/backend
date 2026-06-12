@@ -61,10 +61,12 @@ export async function PATCH(
         where: { id: variant_id },
         data: {
           ...(base_price !== undefined && { base_price: parseFloat(base_price) }),
-          ...(color      !== undefined && { color }),
-          ...(size       !== undefined && { size }),
+
+          ...(color      !== undefined && { color: color || null }),
+          ...(size       !== undefined && { size: size || null }),
+          ...(barcode    !== undefined && { barcode: barcode || null }),
+          
           ...(stock      !== undefined && { stock: parseInt(stock) }),
-          ...(barcode    !== undefined && { barcode }),
           ...(image      !== undefined && { image }), 
           ...(is_active  !== undefined && { is_active }),
         }
