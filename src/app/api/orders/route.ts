@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { generateOrderNumber } from '@/lib/order'
 import { checkServiceability } from '@/lib/shiprocket' 
+// 🔥 1. Added your WhatsApp import here
+import { sendOrderConfirmationWhatsApp } from '@/lib/whatsapp' 
 
 export async function GET(req: Request) {
   try {
@@ -27,7 +29,6 @@ export async function POST(req: Request) {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // 🔥 Added coupon_code extraction
     const { shipping_address, notes, coupon_code } = await req.json()
 
     if (!shipping_address) {
@@ -63,11 +64,10 @@ export async function POST(req: Request) {
       cart_subtotal += Number(item.variant.base_price) * item.quantity;
     }
 
-    // 🔥 NEW: SECURE COUPON VALIDATION & MATH
     let discount_amount = 0;
     let applied_coupon_id = null;
 
-if (coupon_code) {
+    if (coupon_code) {
       const coupon = await prisma.coupon.findUnique({
         where: { code: coupon_code.toUpperCase() }
       })
@@ -82,7 +82,6 @@ if (coupon_code) {
         return NextResponse.json({ error: `Minimum order value for this coupon is ₹${coupon.min_order_value}` }, { status: 400 })
       }
 
-      // 🔥 FINAL SECURITY PATCH: Stop hackers from bypassing the frontend
       const pastOrder = await prisma.order.findFirst({
         where: {
           user_id: user.id,
@@ -94,7 +93,6 @@ if (coupon_code) {
       if (pastOrder) {
         return NextResponse.json({ error: 'You have already used this coupon code.' }, { status: 403 })
       }
-      // 🔥 --------------------------------------------------------
 
       discount_amount = (cart_subtotal * Number(coupon.discount_percent)) / 100;
       applied_coupon_id = coupon.id;
@@ -115,7 +113,6 @@ if (coupon_code) {
       server_shipping_amount = 59;
     }
 
-    // Math: Subtotal - Discount + Shipping
     const total_amount = cart_subtotal - discount_amount + server_shipping_amount
 
     const order = await prisma.order.create({
@@ -124,9 +121,9 @@ if (coupon_code) {
         user_id:         user.id,
         total_amount,    
         shipping_amount: server_shipping_amount,
-        discount_amount: discount_amount, // 🔥 Saved
-        coupon_code:     coupon_code ? coupon_code.toUpperCase() : null, // 🔥 Saved
-        coupon_id:       applied_coupon_id, // 🔥 Saved Relation
+        discount_amount: discount_amount, 
+        coupon_code:     coupon_code ? coupon_code.toUpperCase() : null, 
+        coupon_id:       applied_coupon_id, 
         shipping_address,
         notes:           notes || null,
         status:          'PENDING',
@@ -149,6 +146,16 @@ if (coupon_code) {
       },
       include: { items: true },
     })
+
+    // 🔥 2. Added your trigger right here! It sends the message immediately to the customer.
+    if (shipping_address.phone) {
+      sendOrderConfirmationWhatsApp(
+        shipping_address.phone,
+        shipping_address.name || 'Customer',
+        order.order_number,
+        `₹${total_amount.toLocaleString('en-IN')}`
+      ).catch(console.error);
+    }
 
     return NextResponse.json({ success: true, order }, { status: 201 })
   } catch (error) {
