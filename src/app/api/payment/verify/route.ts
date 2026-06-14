@@ -4,7 +4,7 @@ import { verifyRazorpaySignature } from '@/lib/razorpay'
 import { getUserFromRequest } from '@/lib/auth'
 import { sendOrderConfirmationMail, sendAdminOrderMail } from '@/lib/mailer'
 import { createShiprocketOrder, generateAWB, schedulePickup } from '@/lib/shiprocket' 
-import { sendOrderConfirmationWhatsApp } from '@/lib/whatsapp'
+import { sendOrderConfirmationWhatsApp, sendAdminOrderWhatsApp } from '@/lib/whatsapp'
 
 // POST /api/payment/verify
 export async function POST(req: Request) {
@@ -153,6 +153,19 @@ updated = await prisma.order.update({
   totalAmount:     Number(updated.total_amount),
   shippingAddress: updated.shipping_address as any,
 }).catch(console.error)
+
+sendAdminOrderWhatsApp(
+  updated.order_number,
+  user.name || 'Customer',
+  (updated.shipping_address as any)?.phone || '',
+  `₹${Number(updated.total_amount).toLocaleString('en-IN')}`,
+  updated.items.map(item => ({
+    name: item.name,
+    quantity: item.quantity,
+    size: item.size,
+    color: item.color,
+  }))
+).catch(console.error)
 
     // 🔥 ADDED: Instantly ping customer's WhatsApp
     const phone = (updated.shipping_address as any)?.phone;

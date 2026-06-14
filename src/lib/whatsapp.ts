@@ -38,9 +38,7 @@ async function sendToMeta(body: object): Promise<{ message_id?: string }> {
   }
 }
 
-/**
- * Normalizes an Indian phone number to exactly 12 digits (91XXXXXXXXXX)
- */
+
 function formatPhoneForWhatsApp(phone: string): string {
   let cleanPhone = String(phone).replace(/\D/g, '');
   if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) return cleanPhone;
@@ -49,11 +47,7 @@ function formatPhoneForWhatsApp(phone: string): string {
   throw new Error("Invalid Indian phone number format");
 }
 
-/**
- * Sends the Order Confirmation Template.
- * Template: order_confirmed
- * Variables: {{1}} Customer Name, {{2}} Order Number, {{3}} Total Amount
- */
+
 export async function sendOrderConfirmationWhatsApp(
   phone: string,
   customerName: string,
@@ -86,11 +80,7 @@ export async function sendOrderConfirmationWhatsApp(
   }
 }
 
-/**
- * Sends the Order Shipped/Tracking Template.
- * Template: order_shipped
- * Variables: {{1}} Order Number, {{2}} Tracking URL
- */
+
 export async function sendShippingUpdateWhatsApp(
   phone: string,
   orderNumber: string,
@@ -118,5 +108,47 @@ export async function sendShippingUpdateWhatsApp(
     });
   } catch (error) {
     console.error("Failed to send shipping update WhatsApp:", error);
+  }
+}
+
+
+
+export async function sendAdminOrderWhatsApp(
+  orderNumber: string,
+  customerName: string,
+  customerPhone: string,
+  totalAmount: string,
+  items: { name: string; quantity: number; size?: string | null; color?: string | null }[]
+) {
+  try {
+    const itemsSummary = items.map(item => 
+      `${item.quantity}x ${item.name}${item.size ? ` (${item.size}` : ''}${item.color ? `, ${item.color})` : item.size ? ')' : ''}`
+    ).join(', ')
+
+    const adminPhone = '919966248223'
+
+    return await sendToMeta({
+      messaging_product: 'whatsapp',
+      to: adminPhone,
+      type: 'template',
+      template: {
+        name: 'admin_order_alert',
+        language: { code: 'en' },
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: orderNumber },
+              { type: 'text', text: customerName || 'Customer' },
+              { type: 'text', text: customerPhone },
+              { type: 'text', text: totalAmount },
+              { type: 'text', text: itemsSummary },
+            ],
+          },
+        ],
+      },
+    })
+  } catch (error) {
+    console.error('Failed to send admin order WhatsApp:', error)
   }
 }
