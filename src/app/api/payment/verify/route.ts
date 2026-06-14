@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyRazorpaySignature } from '@/lib/razorpay'
 import { getUserFromRequest } from '@/lib/auth'
-import { sendOrderConfirmationMail } from '@/lib/mailer'
+import { sendOrderConfirmationMail, sendAdminOrderMail } from '@/lib/mailer'
 import { createShiprocketOrder, generateAWB, schedulePickup } from '@/lib/shiprocket' 
 import { sendOrderConfirmationWhatsApp } from '@/lib/whatsapp'
 
@@ -111,16 +111,19 @@ export async function POST(req: Request) {
       const awbData = await generateAWB(targetShipmentId);
       await schedulePickup(targetShipmentId); // 🚚 The driver is now officially on the way!
 
-      // D. Update your database with the tracking context
-      updated = await prisma.order.update({
-        where: { id: updated.id },
-        data: {
-          shiprocket_order_id: String(targetShipmentId), // Safely stored in our repurposed column
-          tracking_url: awbData.response?.data?.awb_code ? `https://shiprocket.co/tracking/${awbData.response.data.awb_code}` : null,
-          status: 'SHIPPED', // Promotes order state directly to dispatched
-        },
-        include: { items: true }
-      });
+// D. Update your database with the tracking context
+const extractedAwb = awbData?.response?.data?.awb_code || null
+
+updated = await prisma.order.update({
+  where: { id: updated.id },
+  data: {
+    shiprocket_order_id: String(targetShipmentId),
+    awb_code: extractedAwb ? String(extractedAwb) : null,
+    tracking_url: extractedAwb ? `https://shiprocket.co/tracking/${extractedAwb}` : null,
+    status: 'SHIPPED',
+  },
+  include: { items: true }
+});
 
       console.log(`✅ 100% Auto-Shipment Success for Order: ${updated.order_number}`);
     } catch (shipError) {
@@ -140,6 +143,16 @@ export async function POST(req: Request) {
         shippingAddress: updated.shipping_address as any,
       }).catch(console.error)
     }
+
+    sendAdminOrderMail({
+  orderNumber:     updated.order_number,
+  customerName:    user.name || 'Customer',
+  customerEmail:   user.email || '',
+  customerPhone:   (updated.shipping_address as any)?.phone || '',
+  items:           updated.items,
+  totalAmount:     Number(updated.total_amount),
+  shippingAddress: updated.shipping_address as any,
+}).catch(console.error)
 
     // 🔥 ADDED: Instantly ping customer's WhatsApp
     const phone = (updated.shipping_address as any)?.phone;

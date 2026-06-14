@@ -158,3 +158,85 @@ export async function sendShippingMail({
     `,
   })
 }
+
+
+export async function sendAdminOrderMail({
+  orderNumber,
+  customerName,
+  customerEmail,
+  customerPhone,
+  items,
+  totalAmount,
+  shippingAddress,
+}: {
+  orderNumber:     string
+  customerName:    string
+  customerEmail:   string
+  customerPhone:   string
+  items:           any[]
+  totalAmount:     number
+  shippingAddress: any
+}) {
+  const itemsHtml = items.map((item) => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.size || '—'} / ${item.color || '—'}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₹${Number(item.price * item.quantity).toLocaleString('en-IN')}</td>
+    </tr>
+  `).join('')
+
+  await transporter.sendMail({
+    from:    `"TFM Orders" <${process.env.GMAIL_USER}>`,
+    to:      'tirumalafamilymall@gmail.com',
+    subject: `🛍️ New Order Received — ${orderNumber}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #CC0000; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">New Order Alert 🛍️</h1>
+        </div>
+
+        <div style="padding: 24px;">
+          <div style="background: #f9f9f9; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="margin: 0 0 8px 0;">Order ${orderNumber}</h2>
+            <p style="margin: 0; color: #666;">Payment confirmed and shipment auto-scheduled.</p>
+          </div>
+
+          <h3>Customer Details</h3>
+          <p style="margin: 4px 0;"><strong>Name:</strong> ${customerName}</p>
+          <p style="margin: 4px 0;"><strong>Email:</strong> ${customerEmail}</p>
+          <p style="margin: 4px 0;"><strong>Phone:</strong> ${customerPhone}</p>
+
+          <h3 style="margin-top: 20px;">Shipping Address</h3>
+          <p style="margin: 4px 0;">${shippingAddress.name}</p>
+          <p style="margin: 4px 0;">${shippingAddress.address}</p>
+          <p style="margin: 4px 0;">${shippingAddress.city}, ${shippingAddress.state} — ${shippingAddress.pincode}</p>
+          <p style="margin: 4px 0;">📞 ${shippingAddress.phone}</p>
+
+          <h3 style="margin-top: 20px;">Items Ordered</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f0f0f0;">
+                <th style="padding: 8px; text-align: left;">Product</th>
+                <th style="padding: 8px; text-align: center;">Size / Color</th>
+                <th style="padding: 8px; text-align: center;">Qty</th>
+                <th style="padding: 8px; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" style="padding: 12px 8px; text-align: right; font-size: 16px;"><strong>Total Paid</strong></td>
+                <td style="padding: 12px 8px; text-align: right; font-size: 16px; color: #CC0000;"><strong>₹${Number(totalAmount).toLocaleString('en-IN')}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div style="margin-top: 24px; padding: 12px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #CC0000;">
+            <p style="margin: 0; font-size: 13px;">⚡ Shiprocket pickup has been auto-scheduled. Log in to admin panel to print the shipping label.</p>
+          </div>
+        </div>
+      </div>
+    `,
+  })
+}

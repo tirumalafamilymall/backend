@@ -100,7 +100,7 @@ export async function POST(req: Request) {
 
     let server_shipping_amount = 0;
     try {
-      const pickup_postcode = process.env.STORE_PINCODE || '532201'; 
+      const pickup_postcode = process.env.STORE_PINCODE || '532203'; 
       const shipData = await checkServiceability(pickup_postcode, pincode, 0.5, false); 
       
       if (shipData?.data?.available_courier_companies?.length > 0) {

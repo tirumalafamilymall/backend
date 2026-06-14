@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateAWB, schedulePickup } from '@/lib/shiprocket'
+import { getAdminFromRequest } from '@/lib/auth'
 
-// POST /api/admin/shipping/awb
 async function handlePOST(req: Request) {
   try {
+    const admin = await getAdminFromRequest(req)
+    if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { order_id, shipment_id } = await req.json()
 
     if (!order_id || !shipment_id) {

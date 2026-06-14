@@ -34,20 +34,15 @@ export async function POST(req: Request) {
 
     let shiprocketData;
 
-    try {
-      // 1. Try to call the real API first
-      shiprocketData = await createShiprocketOrder(order_id)
-    } catch (apiError: any) {
-      // 2. MOCK FALLBACK: If real API fails (likely due to 0 balance)
-      console.warn("⚠️ Shiprocket API failed. Switching to MOCK data for testing.");
-      
-      shiprocketData = {
-        order_id: `MOCK-SR-${Date.now()}`,
-        shipment_id: `MOCK-SHP-${Date.now()}`,
-        status: "NEW",
-        is_mock: true
-      }
-    }
+try {
+  shiprocketData = await createShiprocketOrder(order_id)
+} catch (apiError: any) {
+  console.error("Shiprocket order creation failed:", apiError)
+  return NextResponse.json(
+    { error: 'Failed to create shipment. Please try again.' },
+    { status: 500 }
+  )
+}
 
     // 🔥 CRITICAL FIX: We MUST store the `shipment_id` into the database.
     // All downstream Shiprocket APIs (AWB, Labels, Pickups) require shipment_id!
