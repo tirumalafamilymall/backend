@@ -50,7 +50,7 @@ if (!groupedProducts.has(code)) {
             subcategory:   item.subcategory,
             brand:         item.brand,
             slug:          generateSlug(item.name, code),
-            sales_channel: (item.sales_channel && String(item.sales_channel).trim().toUpperCase() === 'INSTA_LIVE') ? 'INSTA_LIVE' : 'MAIN_STORE',
+           sales_channel: (item.sales_channel && ['INSTA_LIVE', 'INSTA-LIVE', 'INSTALIVE', 'INSTA LIVE'].includes(String(item.sales_channel).trim().toUpperCase())) ? 'INSTA_LIVE' : 'MAIN_STORE',
           },
           variants: []
         })
