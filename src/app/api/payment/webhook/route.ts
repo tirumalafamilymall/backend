@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
       const order = await prisma.order.findFirst({
         where: { razorpay_order_id },
-        include: { items: true }, 
+        include: { items: true },
       })
 
       // Safety check
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true })
       }
 
-// 🔥 ATOMIC UPDATE
+      // 🔥 ATOMIC UPDATE
       const updatedOrderResult = await prisma.order.updateMany({
         where: { id: order.id, payment_status: 'UNPAID' },
         data: {
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true }) // Already processed by frontend
       }
 
-      // CHANGED: Webhook must also deduct stock from variants if the main route failed!
+      // Deduct stock
       await Promise.all(
         order.items.map((item) => {
           if (item.variant_id) {
@@ -65,14 +65,101 @@ export async function POST(req: Request) {
         })
       )
 
-      // CHANGED: Webhook must also clear the user's cart
-      const userCart = await prisma.cart.findUnique({ 
-        where: { user_id: order.user_id } 
+      // Clear cart
+      const userCart = await prisma.cart.findUnique({
+        where: { user_id: order.user_id }
       })
       if (userCart) {
-        await prisma.cartItem.deleteMany({ 
-          where: { cart_id: userCart.id } 
+        await prisma.cartItem.deleteMany({
+          where: { cart_id: userCart.id }
         })
+      }
+
+      // Auto-shipment
+      try {
+        const { createShiprocketOrder, generateAWB, schedulePickup } = await import('@/lib/shiprocket')
+
+        const shiprocketData = await createShiprocketOrder(order.id)
+        const targetShipmentId = shiprocketData.shipment_id || shiprocketData.order_id
+        const awbData = await generateAWB(targetShipmentId)
+        await schedulePickup(targetShipmentId)
+
+        const extractedAwb = awbData?.response?.data?.awb_code || null
+
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            shiprocket_order_id: String(targetShipmentId),
+            awb_code:    extractedAwb ? String(extractedAwb) : null,
+            tracking_url: extractedAwb ? `https://shiprocket.co/tracking/${extractedAwb}` : null,
+            status: 'SHIPPED',
+          }
+        })
+
+        console.log(`✅ Webhook Auto-Shipment Success for Order: ${order.order_number}`)
+      } catch (shipError) {
+        console.error('❌ Webhook Auto-Shipment Failed:', shipError)
+      }
+
+      // Notifications
+      try {
+        const { sendOrderConfirmationMail, sendAdminOrderMail } = await import('@/lib/mailer')
+        const { sendOrderConfirmationWhatsApp, sendAdminOrderWhatsApp } = await import('@/lib/whatsapp')
+
+        const user = await prisma.user.findUnique({ where: { id: order.user_id } })
+
+        const freshOrder = await prisma.order.findUnique({
+          where: { id: order.id },
+          include: { items: true }
+        })
+
+        if (!freshOrder) throw new Error('Order not found')
+
+        if (user?.email) {
+          sendOrderConfirmationMail({
+            customerEmail:   user.email,
+            customerName:    user.name || 'Customer',
+            orderNumber:     freshOrder.order_number,
+            items:           freshOrder.items,
+            totalAmount:     Number(freshOrder.total_amount),
+            shippingAddress: freshOrder.shipping_address as any,
+          }).catch(console.error)
+        }
+
+        sendAdminOrderMail({
+          orderNumber:     freshOrder.order_number,
+          customerName:    user?.name || 'Customer',
+          customerEmail:   user?.email || '',
+          customerPhone:   (freshOrder.shipping_address as any)?.phone || '',
+          items:           freshOrder.items,
+          totalAmount:     Number(freshOrder.total_amount),
+          shippingAddress: freshOrder.shipping_address as any,
+        }).catch(console.error)
+
+        sendAdminOrderWhatsApp(
+          freshOrder.order_number,
+          user?.name || 'Customer',
+          (freshOrder.shipping_address as any)?.phone || '',
+          `₹${Number(freshOrder.total_amount).toLocaleString('en-IN')}`,
+          freshOrder.items.map(item => ({
+            name:     item.name,
+            quantity: item.quantity,
+            size:     item.size,
+            color:    item.color,
+          }))
+        ).catch(console.error)
+
+        const phone = (freshOrder.shipping_address as any)?.phone
+        if (phone) {
+          sendOrderConfirmationWhatsApp(
+            phone,
+            user?.name || 'Valued Customer',
+            freshOrder.order_number,
+            `₹${Number(freshOrder.total_amount).toLocaleString('en-IN')}`
+          ).catch(console.error)
+        }
+      } catch (notifError) {
+        console.error('❌ Webhook Notifications Failed:', notifError)
       }
     }
 
@@ -88,7 +175,7 @@ export async function POST(req: Request) {
       if (!order) {
         return NextResponse.json({ received: true })
       }
-      
+
       console.log(`Payment failed for order: ${order?.order_number}`)
     }
 
