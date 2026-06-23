@@ -3,8 +3,6 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { generateOrderNumber } from '@/lib/order'
 import { checkServiceability } from '@/lib/shiprocket' 
-// 🔥 1. Added your WhatsApp import here
-import { sendOrderConfirmationWhatsApp } from '@/lib/whatsapp' 
 
 export async function GET(req: Request) {
   try {
@@ -146,16 +144,6 @@ export async function POST(req: Request) {
       },
       include: { items: true },
     })
-
-    // 🔥 2. Added your trigger right here! It sends the message immediately to the customer.
-    if (shipping_address.phone) {
-      sendOrderConfirmationWhatsApp(
-        shipping_address.phone,
-        shipping_address.name || 'Customer',
-        order.order_number,
-        `₹${total_amount.toLocaleString('en-IN')}`
-      ).catch(console.error);
-    }
 
     return NextResponse.json({ success: true, order }, { status: 201 })
   } catch (error) {
