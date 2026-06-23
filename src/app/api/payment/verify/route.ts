@@ -6,6 +6,8 @@ import { sendOrderConfirmationMail, sendAdminOrderMail } from '@/lib/mailer'
 import { createShiprocketOrder, generateAWB, schedulePickup } from '@/lib/shiprocket' 
 import { sendOrderConfirmationWhatsApp, sendAdminOrderWhatsApp } from '@/lib/whatsapp'
 
+export const maxDuration = 60 
+
 // POST /api/payment/verify
 export async function POST(req: Request) {
   try {
