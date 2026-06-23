@@ -169,9 +169,14 @@ export async function schedulePickup(shipmentId: string) {
 }
 
 export async function generateLabel(shipmentId: string) {
-  const token = await getToken()
-  const res = await axios.post(`${BASE_URL}/courier/generate/label`, { shipment_id: [shipmentId] }, { headers: authHeaders(token) })
-  return res.data
+  try {
+    const token = await getToken()
+    const res = await axios.post(`${BASE_URL}/courier/generate/label`, { shipment_id: [shipmentId] }, { headers: authHeaders(token) })
+    return res.data
+  } catch (error: any) {
+    console.error('generateLabel failed:', error?.response?.data || error?.message || error)
+    throw error
+  }
 }
 
 export async function generateManifest(shipmentId: string) {
