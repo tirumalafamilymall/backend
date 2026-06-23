@@ -176,8 +176,21 @@ export async function generateLabel(shipmentId: string) {
 
 export async function generateManifest(shipmentId: string) {
   const token = await getToken()
-  const res = await axios.post(`${BASE_URL}/manifests/generate`, { shipment_id: [shipmentId] }, { headers: authHeaders(token) })
-  return res.data
+  // Try to generate — if already generated, fetch the existing one
+  try {
+    const res = await axios.post(`${BASE_URL}/manifests/generate`, { shipment_id: [shipmentId] }, { headers: authHeaders(token) })
+    return res.data
+  } catch (error: any) {
+    if (error.response?.data?.status_code === 400 && error.response?.data?.message?.includes('already generated')) {
+      // Manifest already exists — fetch it
+      const fetchRes = await axios.get(`${BASE_URL}/manifests/print`, {
+        params: { shipment_id: shipmentId },
+        headers: authHeaders(token)
+      })
+      return fetchRes.data
+    }
+    throw error
+  }
 }
 
 export async function checkServiceability(
