@@ -37,9 +37,9 @@ export async function POST(req: Request) {
 try {
   shiprocketData = await createShiprocketOrder(order_id)
 } catch (apiError: any) {
-  console.error("Shiprocket order creation failed:", apiError)
+  console.error("Shiprocket order creation failed:", apiError?.response?.data || apiError?.message || apiError)
   return NextResponse.json(
-    { error: 'Failed to create shipment. Please try again.' },
+    { error: apiError?.response?.data?.message || 'Failed to create shipment. Please try again.' },
     { status: 500 }
   )
 }
