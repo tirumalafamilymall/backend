@@ -48,6 +48,14 @@ function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` }
 }
 
+function formatPhoneForShiprocket(phone: string): string {
+  const clean = String(phone).replace(/\D/g, '') // Remove all non-digits
+  if (clean.length === 12 && clean.startsWith('91')) return clean.substring(2)
+  if (clean.length === 11 && clean.startsWith('0')) return clean.substring(1)
+  if (clean.length === 10) return clean
+  return clean.slice(-10) // Fallback: take last 10 digits
+}
+
 export async function createShiprocketOrder(orderId: string) {
   const order = await prisma.order.findUnique({
     where:   { id: orderId },
@@ -74,7 +82,7 @@ export async function createShiprocketOrder(orderId: string) {
     billing_state:          address.state,
     billing_country:        'India',
     billing_email:          order.user.email || '',
-    billing_phone:          address.phone,
+    billing_phone: formatPhoneForShiprocket(address.phone),
     shipping_is_billing:    true,
     order_items: order.items.map((item) => ({
       name:          item.name,
