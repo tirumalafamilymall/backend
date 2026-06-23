@@ -10,24 +10,31 @@ async function handlePOST(req: Request) {
     const { shipment_id } = await req.json()
 
     if (!shipment_id) {
-      return NextResponse.json(
-        { error: 'shipment_id is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'shipment_id is required' }, { status: 400 })
     }
 
-    const [label, manifest] = await Promise.all([
-      generateLabel(shipment_id),
-      generateManifest(shipment_id),
-    ])
+    // Run both independently — don't let one failure block the other
+    const labelResult = await generateLabel(shipment_id).catch(err => {
+      console.error('Label generation failed:', err?.response?.data || err?.message)
+      return null
+    })
+
+    const manifestResult = await generateManifest(shipment_id).catch(err => {
+      console.error('Manifest generation failed:', err?.response?.data || err?.message)
+      return null
+    })
+
+    if (!labelResult && !manifestResult) {
+      return NextResponse.json({ error: 'Failed to generate label and manifest' }, { status: 500 })
+    }
 
     return NextResponse.json({
-      success:  true,
-      label:    label,    // contains label_url to download PDF
-      manifest: manifest, // contains manifest_url
+      success: true,
+      label: labelResult,
+      manifest: manifestResult,
     })
   } catch (error: any) {
-    console.error(error?.response?.data || error)
+    console.error('Label route error:', error?.response?.data || error?.message || error)
     return NextResponse.json(
       { error: error.message || 'Failed to generate label' },
       { status: 500 }
