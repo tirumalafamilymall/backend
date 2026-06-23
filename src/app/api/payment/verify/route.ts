@@ -43,9 +43,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    if (order.payment_status === 'PAID') {
-      return NextResponse.json({ error: 'Order already paid' }, { status: 400 })
-    }
+if (order.payment_status === 'PAID') {
+  const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, include: { items: true }})
+  return NextResponse.json({ success: true, order: finalOrder })
+}
 
     // 🔥 ATOMIC UPDATE: Only update if UNPAID
     const updatedOrderResult = await prisma.order.updateMany({
