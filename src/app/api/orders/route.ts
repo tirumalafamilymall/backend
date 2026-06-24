@@ -102,7 +102,11 @@ export async function POST(req: Request) {
       const shipData = await checkServiceability(pickup_postcode, pincode, 0.5, false); 
       
       if (shipData?.data?.available_courier_companies?.length > 0) {
-        server_shipping_amount = Number(shipData.data.available_courier_companies[0].freight_charge);
+       const couriers = shipData.data.available_courier_companies
+const best = couriers.sort((a: any, b: any) =>
+  (a.rate || a.freight_charge || 999) - (b.rate || b.freight_charge || 999)
+)[0]
+server_shipping_amount = Math.round(Number(best?.rate || best?.freight_charge || 59))
       } else {
         server_shipping_amount = 59; 
       }

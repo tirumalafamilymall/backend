@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Department } from '@prisma/client'
+import { getAdminFromRequest } from '@/lib/auth'
 
 // GET /api/admin/products/:id
 export async function GET(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+   const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const params = await _context.params
   try {
     const product = await prisma.product.findFirst({
@@ -31,6 +34,8 @@ export async function PATCH(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+   const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const params = await _context.params
   try {
     const body = await req.json()
@@ -98,6 +103,8 @@ export async function DELETE(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+  const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const params = await _context.params
   try {
     const { searchParams } = new URL(req.url)

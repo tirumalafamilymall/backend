@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendShippingMail } from '@/lib/mailer'
+import { getAdminFromRequest } from '@/lib/auth'
 
 export async function GET(
+  
   req: Request,
   _context: { params: Promise<{ orderId: string }> }
 ) {
+
+   const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const params = await _context.params
   try {
     const rawOrder = await prisma.order.findUnique({
@@ -61,6 +67,9 @@ export async function PATCH(
   req: Request,
   _context: { params: Promise<{ orderId: string }> }
 ) {
+   const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    
   const params = await _context.params
   try {
     const { status, tracking_url, shiprocket_order_id } = await req.json()

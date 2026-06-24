@@ -115,7 +115,7 @@ if (order.payment_status === 'PAID') {
       await schedulePickup(targetShipmentId); // 🚚 The driver is now officially on the way!
 
 // D. Update your database with the tracking context
-const extractedAwb = awbData?.response?.data?.awb_code || null
+const extractedAwb = awbData?.response?.awb_code || null
 
 updated = await prisma.order.update({
   where: { id: updated.id },
@@ -123,7 +123,7 @@ updated = await prisma.order.update({
     shiprocket_order_id: String(targetShipmentId),
     awb_code: extractedAwb ? String(extractedAwb) : null,
     tracking_url: extractedAwb ? `https://shiprocket.co/tracking/${extractedAwb}` : null,
-    status: 'SHIPPED',
+    status: 'CONFIRMED',
   },
   include: { items: true }
 });

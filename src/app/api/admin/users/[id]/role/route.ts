@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { adminAuth } from '@/lib/firebase-admin'
+import { getAdminFromRequest } from '@/lib/auth'
 
 export async function PATCH(
   req: Request,
   _context: { params: Promise<{ id: string }> }
 ) {
+   const admin = await getAdminFromRequest(req)
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const params = await _context.params
   try {
     const { role } = await req.json()

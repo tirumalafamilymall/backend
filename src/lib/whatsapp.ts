@@ -121,9 +121,10 @@ export async function sendAdminOrderWhatsApp(
   items: { name: string; quantity: number; size?: string | null; color?: string | null }[]
 ) {
   try {
-    const itemsSummary = items.map(item => 
-      `${item.quantity}x ${item.name}${item.size ? ` (${item.size}` : ''}${item.color ? `, ${item.color})` : item.size ? ')' : ''}`
-    ).join(', ')
+const itemsSummary = items.map(item => {
+  const attrs = [item.size, item.color].filter(Boolean).join(', ')
+  return `${item.quantity}x ${item.name}${attrs ? ` (${attrs})` : ''}`
+}).join(', ')
 
     const adminPhone = '919966248223'
 

@@ -86,7 +86,7 @@ export async function POST(req: Request) {
         const awbData = await generateAWB(targetShipmentId)
         await schedulePickup(targetShipmentId)
 
-        const extractedAwb = awbData?.response?.data?.awb_code || null
+        const extractedAwb = awbData?.response?.awb_code || null
 
         await prisma.order.update({
           where: { id: order.id },
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
             shiprocket_order_id: String(targetShipmentId),
             awb_code:    extractedAwb ? String(extractedAwb) : null,
             tracking_url: extractedAwb ? `https://shiprocket.co/tracking/${extractedAwb}` : null,
-            status: 'SHIPPED',
+            status: 'CONFIRMED',
           }
         })
 

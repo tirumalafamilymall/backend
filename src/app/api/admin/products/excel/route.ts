@@ -71,25 +71,24 @@ if (!groupedProducts.has(code)) {
       })
     }
 
-  // ── Step 2: Process Database Upserts ─────────────────────────────────
-    let parentProcessed = 0
-    let variantsCreated = 0 // 🔥 NEW: Explicitly tracking creates
-    let variantsUpdated = 0 // 🔥 NEW: Explicitly tracking updates
-    const failedRows: any[] = []
+// ── Step 2: Process Database Upserts ─────────────────────────────────
+  let parentProcessed = 0
+  let variantsCreated = 0
+  let variantsUpdated = 0
+  const failedRows: any[] = []
 
-    // We process sequentially to catch individual errors gracefully
-    for (const [code, group] of groupedProducts.entries()) {
-      try {
-        // A. Upsert the Parent Blueprint
-        const parent = await prisma.product.upsert({
+  for (const [code, group] of groupedProducts.entries()) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const parent = await tx.product.upsert({
           where: { product_code: code },
           create: group.parentData,
           update: {
-            name:        group.parentData.name,
-            department:  group.parentData.department,
-            category:    group.parentData.category,
-            subcategory: group.parentData.subcategory,
-            brand:       group.parentData.brand,
+            name:          group.parentData.name,
+            department:    group.parentData.department,
+            category:      group.parentData.category,
+            subcategory:   group.parentData.subcategory,
+            brand:         group.parentData.brand,
             sales_channel: group.parentData.sales_channel,
             is_deleted:    false,
             is_active:     true,
@@ -97,30 +96,25 @@ if (!groupedProducts.has(code)) {
         })
         parentProcessed++
 
-        // B. Upsert the Child Variants
         for (const v of group.variants) {
-          const existingVariant = await prisma.productVariant.findFirst({
-            where: {
-              product_id: parent.id,
-              size: v.size,
-              color: v.color
-            }
+          const existingVariant = await tx.productVariant.findFirst({
+            where: { product_id: parent.id, size: v.size, color: v.color }
           })
 
           if (existingVariant) {
-            await prisma.productVariant.update({
+            await tx.productVariant.update({
               where: { id: existingVariant.id },
               data: {
                 base_price: v.base_price,
-                stock:      v.stock, 
+                stock:      v.stock,
                 sku:        v.sku,
                 barcode:    v.barcode,
-                image:      v.image || null, 
+                image:      v.image || null,
               }
             })
-            variantsUpdated++ // 🔥 Counted as an Update
+            variantsUpdated++
           } else {
-            await prisma.productVariant.create({
+            await tx.productVariant.create({
               data: {
                 product_id: parent.id,
                 size:       v.size,
@@ -129,17 +123,18 @@ if (!groupedProducts.has(code)) {
                 stock:      v.stock,
                 sku:        v.sku,
                 barcode:    v.barcode,
-                image:      v.image || null, 
+                image:      v.image || null,
               }
             })
-            variantsCreated++ // 🔥 Counted as a Create
+            variantsCreated++
           }
         }
-      } catch (err: any) {
-        console.error(`Failed processing group ${code}:`, err)
-        failedRows.push({ product_code: code, error: err.message })
-      }
+      })
+    } catch (err: any) {
+      console.error(`Failed processing group ${code}:`, err)
+      failedRows.push({ product_code: code, error: err.message })
     }
+  }
 
     return NextResponse.json({
       success: true,
