@@ -43,7 +43,7 @@ export async function generatePresignedUrl(
 
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 3600 }) // 60 min expiry
 
-  const publicUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_REGION}.digitaloceanspaces.com/${key}`
+  const publicUrl = `https://${process.env.DO_SPACES_BUCKET}.${process.env.DO_SPACES_REGION}.cdn.digitaloceanspaces.com/${key}`
 
   return { uploadUrl, publicUrl, key }
 }
