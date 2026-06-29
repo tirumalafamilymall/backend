@@ -9,6 +9,10 @@ export async function POST(req: Request) {
   try {
 const rawBody = await req.text()
 
+if (!rawBody || rawBody === '{}' || rawBody.trim() === '') {
+  return NextResponse.json({ success: true, message: 'Webhook endpoint active' })
+}
+
 if (process.env.SHIPROCKET_WEBHOOK_SECRET) {
   const signature = req.headers.get('x-shiprocket-signature')
   if (!signature) {
