@@ -126,7 +126,7 @@ const itemsSummary = items.map(item => {
   return `${item.quantity}x ${item.name}${attrs ? ` (${attrs})` : ''}`
 }).join(', ')
 
-    const adminPhone = '918074271503'
+    const adminPhone = '919966248223'
 
     return await sendToMeta({
       messaging_product: 'whatsapp',
