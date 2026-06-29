@@ -19,12 +19,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true })
     }
 
-    const { order_id, current_status, etd, awb_code } = body
+   const { order_id, channel_order_id, current_status, etd, awb_code } = body
 
-    // If no order_id it's just a test ping — return 200
-    if (!order_id) {
-      return NextResponse.json({ success: true })
-    }
+
+// Use channel_order_id (our TFM number) to find the order, fallback to order_id
+const orderNumber = channel_order_id || order_id
+
+if (!orderNumber) {
+  return NextResponse.json({ success: true })
+}
+
 
     if (process.env.SHIPROCKET_WEBHOOK_SECRET) {
       const signature = req.headers.get('x-shiprocket-signature')
@@ -40,9 +44,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const order = await prisma.order.findFirst({
-      where: { order_number: order_id },
-    })
+const order = await prisma.order.findFirst({
+  where: { order_number: orderNumber },
+})
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
