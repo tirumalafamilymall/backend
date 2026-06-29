@@ -8,21 +8,19 @@ import crypto from 'crypto'
 export async function POST(req: Request) {
   try {
 const rawBody = await req.text()
-const signature = req.headers.get('x-shiprocket-signature')
 
-if (!signature) {
-  return NextResponse.json({ error: 'No signature' }, { status: 400 })
-}
-
-const secret = process.env.SHIPROCKET_WEBHOOK_SECRET
-if (!secret) {
-  console.error('SHIPROCKET_WEBHOOK_SECRET is not configured')
-  return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
-}
-
-const expectedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
-if (expectedSignature !== signature) {
-  return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+if (process.env.SHIPROCKET_WEBHOOK_SECRET) {
+  const signature = req.headers.get('x-shiprocket-signature')
+  if (!signature) {
+    return NextResponse.json({ error: 'No signature' }, { status: 400 })
+  }
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.SHIPROCKET_WEBHOOK_SECRET)
+    .update(rawBody)
+    .digest('hex')
+  if (expectedSignature !== signature) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  }
 }
 
 const body = JSON.parse(rawBody)
