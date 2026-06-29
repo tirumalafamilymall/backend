@@ -12,7 +12,7 @@ export async function GET() {
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to: '919966248223',
+      to: '8074271503',
       type: 'template',
       template: {
         name: 'admin_order_alert',
