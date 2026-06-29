@@ -94,3 +94,8 @@ const order = await prisma.order.findFirst({
     return NextResponse.json({ error: 'Webhook failed' }, { status: 500 })
   }
 }
+
+
+export async function GET() {
+  return NextResponse.json({ success: true, message: 'Webhook endpoint active' })
+}
