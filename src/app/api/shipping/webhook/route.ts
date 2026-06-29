@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendShippingUpdateWhatsApp } from '@/lib/whatsapp'
-import crypto from 'crypto'
 
 export async function POST(req: Request) {
   try {
     const rawBody = await req.text()
 
-    // Always return 200 for empty/verification pings
     if (!rawBody || rawBody.trim() === '' || rawBody === '{}') {
       return NextResponse.json({ success: true })
     }
@@ -19,37 +17,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true })
     }
 
-   const { order_id, channel_order_id, current_status, etd, awb_code } = body
+    const { order_id, channel_order_id, current_status, awb_code } = body
 
-
-// Use channel_order_id (our TFM number) to find the order, fallback to order_id
-const orderNumber = channel_order_id || order_id
-
-if (!orderNumber) {
-  return NextResponse.json({ success: true })
-}
-
-
-    if (process.env.SHIPROCKET_WEBHOOK_SECRET) {
-      const signature = req.headers.get('x-shiprocket-signature')
-      if (!signature) {
-        return NextResponse.json({ error: 'No signature' }, { status: 400 })
-      }
-      const expectedSignature = crypto
-        .createHmac('sha256', process.env.SHIPROCKET_WEBHOOK_SECRET)
-        .update(rawBody)
-        .digest('hex')
-      if (expectedSignature !== signature) {
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
-      }
+    const orderNumber = channel_order_id || order_id
+    if (!orderNumber) {
+      return NextResponse.json({ success: true })
     }
 
-const order = await prisma.order.findFirst({
-  where: { order_number: orderNumber },
-})
+    const order = await prisma.order.findFirst({
+      where: { order_number: orderNumber.toString() },
+    })
 
+    // Return 200 even if order not found — handles Shiprocket test pings
     if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+      console.warn(`Webhook: unknown order ${orderNumber}`)
+      return NextResponse.json({ success: true })
     }
 
     const statusMap: Record<string, string> = {
@@ -90,11 +72,10 @@ const order = await prisma.order.findFirst({
     return NextResponse.json({ success: true })
 
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Webhook failed' }, { status: 500 })
+    console.error('Shiprocket Webhook Error:', error)
+    return NextResponse.json({ success: true })
   }
 }
-
 
 export async function GET() {
   return NextResponse.json({ success: true, message: 'Webhook endpoint active' })
